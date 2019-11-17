@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet"
+          href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <style>
+      button {
+          width: 80px;
+          margin-right: 2px;
+      }
+      textarea {
+          font-family: monospace;
+          min-height: 200px;
+      }
+      .form-control[readonly] {
+          background-color: #ffffff;
+      }
+      .no-left-padding {
+           padding-left: 0 !important;
+           margin: 0 !important;
+      }
+      .no-right-padding {
+           padding-right: 0 !important;
+           margin: 0 !important;
+      }
+    </style>
+    <script>
+      function createSession() {
+          stopSession()
+
+          printLog('Creating session...')
+
+          pc = new RTCPeerConnection({
+              'iceServers': [{ 'url': 'stun:stun.l.google.com:19302' }]
+          })
+
+          pc.ontrack = function(event) {
+              printLog('Accepting new track')
+
+              var el = document.createElement(event.track.kind)
+
+              el.srcObject = event.streams[0]
+              el.autoplay = true
+              el.controls = true
+
+              document.getElementById('tracks').appendChild(el)
+          }
+
+          pc.oniceconnectionstatechange = function(event) {
+              printLog('ICE connection state changed to '+pc.iceConnectionState)
+          }
+
+          pc.addTransceiver('audio', {'direction': 'sendrecv'})
+
+          mediaOpts = {
+              audio: true,
+              video: false,
+          }
+
+          navigator.mediaDevices.getUserMedia(mediaOpts).
+              then(addMic).
+              catch(skipMic)
+      }
+
+      function addMic(stream) {
+          printLog('Adding microphone to session...')
+
+          let track = stream.getTracks()[0]
+          pc.addTrack(track, stream)
+
+          createOffer()
+      }
+
+      function skipMic(err) {
+          printLog('Skipping microphone configuration: '+err)
+
+          createOffer()
+      }
+
+      function createOffer() {
+          let offerOpts = {
+              'mandatory': {
+                  'OfferToReceiveAudio': true,
+                  'OfferToReceiveVideo': false,
+              },
+          }
+
+          pc.createOffer(offerOpts).
+              then(setOffer).
+              catch(printLog)
+      }
+
+      function setOffer(offer) {
+          pc.setLocalDescription(offer)
+
+          document.getElementById('offer').value = pc.localDescription.sdp
+      }
+
+      function startSession() {
+          let answer = document.getElementById('answer').value
+          if (answer === '') {
+              return printLog('Error: SDP answer is not set')
+          }
+
+          printLog('Starting session...')
+
+          let desc = new RTCSessionDescription({
+              'type': 'answer',
+              'sdp': answer,
+          })
+
+          pc.setRemoteDescription(desc).catch(printLog)
+      }
+
+      function stopSession() {
+          if (typeof pc === 'undefined') {
+              return
+          }
+
+          printLog('Stopping session...')
+
+          pc.close()
+          pc = undefined
+
+          document.getElementById('offer').value = ''
+          document.getElementById('answer').value = ''
+          document.getElementById('tracks').innerHTML = ''
+      }
+
+      function printLog(msg) {
+          log = document.getElementById('log')
+          log.value += msg + '\n'
+          log.scrollTop = log.scrollHeight
+      }
+    </script>
+  </head>
+  <body onload="window.createSession()">
+    <div class="container">
+      <div class="row">
+        <h1>WebRTC demo</h1>
+      </div>
+
+      <div class="row">
+        <div class="col-sm-6 no-left-padding">
+          <h2>Offer</h2>
+          <p><i>Copy this to webrtc-cli stdin and press ^D</i></p>
+          <textarea class="form-control" id="offer" readonly="true"></textarea>
+        </div>
+
+        <div class="col-sm-6 no-right-padding">
+          <h2>Answer</h2>
+          <p><i>Paste webrtc-cli stdout here and press "Start"</i></p>
+          <textarea class="form-control" id="answer"></textarea>
+        </div>
+      </div>
+
+      <div class="row">
+        <h2>Session</h2>
+        <button class="btn btn-primary" onclick="window.startSession()">
+          Start
+        </button>
+        <button class="btn btn-primary" onclick="window.stopSession()">
+          Stop
+        </button>
+        <button class="btn btn-primary" onclick="window.createSession()">
+          Refresh
+        </button>
+      </div>
+
+      <div class="row">
+        <h2>Tracks</h2>
+        <div id="tracks"></div>
+      </div>
+
+      <div class="row">
+        <h2>Logs</h2>
+        <textarea class="form-control" id="log" readonly="true"></textarea>
+      </div>
+    </div>
+  </body>
+</html>

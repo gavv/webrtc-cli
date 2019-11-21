@@ -43,7 +43,7 @@ func mainWithCode() int {
 	rate := fset.Uint("rate", 48000, "sample rate")
 	channels := fset.Uint("chans", 2, "# of channels")
 
-	sourceFrame := fset.Duration("source-frame", 20*time.Millisecond, "source frame size")
+	sourceFrame := fset.Duration("source-frame", 40*time.Millisecond, "source frame size")
 	sinkFrame := fset.Duration("sink-frame", 20*time.Millisecond, "sink frame size")
 	jitterBuf := fset.Duration("jitter-buf", 60*time.Millisecond, "jitter buffer size")
 	pulseBuf := fset.Duration("pulse-buf", 20*time.Millisecond, "pulseaudio buffer size")

@@ -35,12 +35,14 @@ type JitterBuf struct {
 	minSize    int
 	maxSize    int
 
-	logDrop *rate.Limiter
-	logZero *rate.Limiter
-	logSize *rate.Limiter
+	logDrop  *rate.Limiter
+	logZero  *rate.Limiter
+	logReset *rate.Limiter
+	logSize  *rate.Limiter
 
 	nDropped int
-	nDelayed int
+	nZeros   int
+	nResets  int
 }
 
 func NewJitterBuf(p JitterBufParams) (*JitterBuf, error) {
@@ -49,21 +51,21 @@ func NewJitterBuf(p JitterBufParams) (*JitterBuf, error) {
 	bufferSize := durationToSamples(p.BufferLength, p.Rate) * p.Channels
 	bufferDrift := durationToSamples(p.MaxDrift, p.Rate) * p.Channels
 
+	freq := 0.01
+	if p.Debug {
+		freq = 0.5
+	}
+
 	j := &JitterBuf{
 		starting:   true,
 		frameSize:  frameSize,
 		targetSize: bufferSize,
 		minSize:    bufferSize - bufferDrift,
 		maxSize:    bufferSize + bufferDrift,
-	}
-
-	j.logDrop = rate.NewLimiter(rate.Limit(0.5), 1)
-	j.logZero = rate.NewLimiter(rate.Limit(0.5), 1)
-
-	if p.Debug {
-		j.logSize = rate.NewLimiter(rate.Limit(0.5), 1)
-	} else {
-		j.logSize = rate.NewLimiter(rate.Limit(0.01), 1)
+		logDrop:    rate.NewLimiter(rate.Limit(freq), 1),
+		logZero:    rate.NewLimiter(rate.Limit(freq), 1),
+		logReset:   rate.NewLimiter(rate.Limit(freq), 1),
+		logSize:    rate.NewLimiter(rate.Limit(freq), 1),
 	}
 
 	return j, nil
@@ -172,11 +174,11 @@ func (j *JitterBuf) shiftFrame() []int16 {
 		return frame
 	}
 
-	j.nDelayed += j.frameSize - len(j.buf)
+	j.nZeros += j.frameSize - len(j.buf)
 	if j.logZero.Allow() {
 		fmt.Fprintf(os.Stderr,
-			"Inserted zeros instead of %d delayed samples\n", j.nDelayed)
-		j.nDelayed = 0
+			"Inserted zeros instead of %d delayed samples\n", j.nZeros)
+		j.nZeros = 0
 	}
 
 	frame := make([]int16, j.frameSize)
@@ -186,7 +188,13 @@ func (j *JitterBuf) shiftFrame() []int16 {
 }
 
 func (j *JitterBuf) resetBuffer() {
-	fmt.Fprintf(os.Stderr, "Resetting buffer, buffer size is %d\n", j.bufferSize())
+	j.nResets++
+
+	if j.logReset.Allow() {
+		fmt.Fprintf(os.Stderr, "Resetting buffer %d times, buffer size is %d\n",
+			j.nResets, j.bufferSize())
+		j.nResets = 0
+	}
 
 	j.rpos = 0
 	j.wpos = uint64(len(j.buf))
@@ -194,8 +202,6 @@ func (j *JitterBuf) resetBuffer() {
 
 func (j *JitterBuf) trimBuffer(maxSize int) {
 	shiftLen := j.bufferSize() - maxSize
-
-	fmt.Fprintf(os.Stderr, "Dropping %d initial samples\n", shiftLen)
 
 	if shiftLen >= len(j.buf) {
 		j.buf = nil

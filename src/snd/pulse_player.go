@@ -84,6 +84,12 @@ func (p *PulsePlayer) runPlayback(params Params) {
 		var data []int16
 
 		select {
+		default:
+		case <-p.cancelCh:
+			return
+		}
+
+		select {
 		case data = <-p.dataCh:
 		case <-p.cancelCh:
 			return

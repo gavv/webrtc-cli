@@ -57,11 +57,11 @@ func (p *PulseRecorder) runRecording(params Params) {
 	}
 
 	stream, err := pulse.NewStream(
-		"", "webrtc-cli", pulse.STREAM_RECORD, params.DeviceOrFile, "capture",
+		"", "webrtc-cli", pulse.STREAM_RECORD, params.DeviceOrFile, "webrtc-cli-record",
 		&sample_spec, nil, nil)
 
 	if err != nil {
-		p.initCh <- fmt.Errorf("can't open pulseaudio stream: %s", err.Error())
+		p.initCh <- fmt.Errorf("can't open pulseaudio record stream: %s", err.Error())
 		return
 	}
 
@@ -85,7 +85,7 @@ func (p *PulseRecorder) runRecording(params Params) {
 		n, err := stream.Read(data)
 		if err != nil {
 			p.batchCh <- Batch{
-				Err: fmt.Errorf("can't read from pulseaudio stream: %s", err.Error()),
+				Err: fmt.Errorf("can't read from pulseaudio record stream: %s", err.Error()),
 			}
 			return
 		}

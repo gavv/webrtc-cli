@@ -67,11 +67,11 @@ func (p *PulsePlayer) runPlayback(params Params) {
 	}
 
 	stream, err := pulse.NewStream(
-		"", "webrtc-cli", pulse.STREAM_PLAYBACK, params.DeviceOrFile, "playback",
+		"", "webrtc-cli", pulse.STREAM_PLAYBACK, params.DeviceOrFile, "webrtc-cli-play",
 		&sample_spec, nil, nil)
 
 	if err != nil {
-		p.initCh <- fmt.Errorf("can't open pulseaudio stream: %s", err.Error())
+		p.initCh <- fmt.Errorf("can't open pulseaudio playback stream: %s", err.Error())
 		return
 	}
 
@@ -97,7 +97,7 @@ func (p *PulsePlayer) runPlayback(params Params) {
 
 		n, err := stream.Write(b)
 		if err != nil {
-			p.errCh <- fmt.Errorf("can't write to pulseaudio stream: %s", err.Error())
+			p.errCh <- fmt.Errorf("can't write to pulseaudio playback stream: %s", err.Error())
 			return
 		}
 

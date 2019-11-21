@@ -70,7 +70,7 @@ func mainWithCode() int {
 	}
 
 	if *offer == *answer {
-		printMsg("exactly one of --offer and --answer options should be specified")
+		printMsg("Error: exactly one of --offer and --answer options should be specified")
 		return 1
 	}
 
@@ -79,43 +79,43 @@ func mainWithCode() int {
 	if *ports != "" {
 		minPort, maxPort, err = parsePorts(*ports)
 		if err != nil {
-			printMsg("invalid --ports: " + err.Error())
+			printMsg("Error: invalid --ports: " + err.Error())
 			return 1
 		}
 	}
 
 	if *rate != 48000 && *rate != 96000 {
-		printMsg("--rate should be 48000 or 96000")
+		printMsg("Error: --rate should be 48000 or 96000")
 		return 1
 	}
 
 	if *channels != 1 && *channels != 2 {
-		printMsg("--chans should be 1 or 2")
+		printMsg("Error: --chans should be 1 or 2")
 		return 1
 	}
 
 	if *lossPerc > 100 {
-		printMsg("--loss-perc should be in [0; 100]")
+		printMsg("Error: --loss-perc should be in [0; 100]")
 		return 1
 	}
 
 	if *simLossPerc > 100 {
-		printMsg("--simulate-loss-perc should be in [0; 100]")
+		printMsg("Error: --simulate-loss-perc should be in [0; 100]")
 		return 1
 	}
 
 	if fset.Changed("loss-perc") && *source == "" {
-		printMsg("--loss-perc is only meaningful when --source is given")
+		printMsg("Error: --loss-perc is only meaningful when --source is given")
 		return 1
 	}
 
 	if fset.Changed("simulate-loss-perc") && *sink == "" {
-		printMsg("--simulate-loss-perc is only meaningful when --sink is given")
+		printMsg("Error: --simulate-loss-perc is only meaningful when --sink is given")
 		return 1
 	}
 
 	if fset.Changed("jitter-buf") && *sink == "" {
-		printMsg("--jitter-buf is only meaningful when --sink is given")
+		printMsg("Error: --jitter-buf is only meaningful when --sink is given")
 		return 1
 	}
 

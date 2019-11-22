@@ -115,6 +115,16 @@ func mainWithCode() int {
 		return 1
 	}
 
+	if fset.Changed("source-frame") && *source == "" {
+		printMsg("Error: --source-frame is only meaningful when --source is given")
+		return 1
+	}
+
+	if fset.Changed("sink-frame") && *sink == "" {
+		printMsg("Error: --sink-frame is only meaningful when --sink is given")
+		return 1
+	}
+
 	if fset.Changed("jitter-buf") && *sink == "" {
 		printMsg("Error: --jitter-buf is only meaningful when --sink is given")
 		return 1

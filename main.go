@@ -120,6 +120,11 @@ func mainWithCode() int {
 		return 1
 	}
 
+	if fset.Changed("max-drift") && *sink == "" {
+		printMsg("Error: --max-drift is only meaningful when --sink is given")
+		return 1
+	}
+
 	rtcParams := rtc.Params{
 		StunURL:             *stun,
 		MinPort:             minPort,

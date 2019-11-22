@@ -81,13 +81,14 @@ Usage of webrtc-cli:
       --sink string               pulseaudio sink
       --stun string               STUN server URL (default "stun:stun.l.google.com:19302")
       --ports string              use specific UDP port range (e.g. "3100:3200")
+      --override-ip string        override IP address in SDP offer/answer
       --rate uint                 sample rate (default 48000)
       --chans uint                # of channels (default 2)
-      --source-frame duration     source frame size (default 20ms)
-      --sink-frame duration       sink frame size (default 20ms)
-      --jitter-buf duration       jitter buffer size (default 60ms)
+      --source-frame duration     source frame size (default 40ms)
+      --sink-frame duration       sink frame size (default 40ms)
+      --jitter-buf duration       jitter buffer size (default 120ms)
       --pulse-buf duration        pulseaudio buffer size (default 20ms)
-      --max-drift duration        maximum jitter buffer drift (default 60ms)
+      --max-drift duration        maximum jitter buffer drift (default 30ms)
       --loss-perc uint            expected packet loss percent, passed to opus encoder (default 25)
       --simulate-loss-perc uint   simulate given loss percent when receiving packets
       --debug                     enable more logs

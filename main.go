@@ -45,11 +45,11 @@ func mainWithCode() int {
 	channels := fset.Uint("chans", 2, "# of channels")
 
 	sourceFrame := fset.Duration("source-frame", 40*time.Millisecond, "source frame size")
-	sinkFrame := fset.Duration("sink-frame", 20*time.Millisecond, "sink frame size")
-	jitterBuf := fset.Duration("jitter-buf", 60*time.Millisecond, "jitter buffer size")
+	sinkFrame := fset.Duration("sink-frame", 40*time.Millisecond, "sink frame size")
+	jitterBuf := fset.Duration("jitter-buf", 120*time.Millisecond, "jitter buffer size")
 	pulseBuf := fset.Duration("pulse-buf", 20*time.Millisecond, "pulseaudio buffer size")
 
-	maxDrift := fset.Duration("max-drift", 60*time.Millisecond,
+	maxDrift := fset.Duration("max-drift", 30*time.Millisecond,
 		"maximum jitter buffer drift")
 
 	lossPerc := fset.Uint("loss-perc", 25,

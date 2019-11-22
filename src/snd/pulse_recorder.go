@@ -41,7 +41,9 @@ func (p *PulseRecorder) Batches() <-chan Batch {
 
 func (p *PulseRecorder) Stop() {
 	close(p.cancelCh)
-	<-p.doneCh
+
+	// there is no way to interrupt pa_simple_read() blocked on suspended device
+	// so we can't wait its termination
 }
 
 func (p *PulseRecorder) runRecording(params Params) {
@@ -68,7 +70,6 @@ func (p *PulseRecorder) runRecording(params Params) {
 	close(p.initCh)
 
 	defer stream.Free()
-	defer stream.Drain()
 
 	frameBytes := durationToSamples(params.FrameLength, params.Rate) *
 		int(sample_spec.FrameSize())
@@ -94,8 +95,14 @@ func (p *PulseRecorder) runRecording(params Params) {
 			panic("unexpected read size from pulseaudio")
 		}
 
-		p.batchCh <- Batch{
+		batch := Batch{
 			Data: bytesToInt16(data),
+		}
+
+		select {
+		case p.batchCh <- batch:
+		case <-p.cancelCh:
+			return
 		}
 	}
 }

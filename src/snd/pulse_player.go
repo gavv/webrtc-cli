@@ -3,11 +3,13 @@ package snd
 import (
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/mesilliac/pulse-simple"
 )
 
 type PulsePlayer struct {
+	stream   *pulse.Stream
 	initCh   chan error
 	dataCh   chan []int16
 	errCh    chan error
@@ -51,7 +53,12 @@ func (p *PulsePlayer) Stopped() <-chan struct{} {
 
 func (p *PulsePlayer) Stop() {
 	close(p.cancelCh)
-	<-p.doneCh
+
+	p.waitDone()
+
+	if p.stream != nil {
+		p.stream.Free()
+	}
 }
 
 func (p *PulsePlayer) runPlayback(params Params) {
@@ -66,7 +73,8 @@ func (p *PulsePlayer) runPlayback(params Params) {
 		Channels: uint8(params.Channels),
 	}
 
-	stream, err := pulse.NewStream(
+	var err error
+	p.stream, err = pulse.NewStream(
 		"", "webrtc-cli", pulse.STREAM_PLAYBACK, params.DeviceOrFile, "webrtc-cli-play",
 		&sample_spec, nil, nil)
 
@@ -76,9 +84,6 @@ func (p *PulsePlayer) runPlayback(params Params) {
 	}
 
 	close(p.initCh)
-
-	defer stream.Free()
-	defer stream.Drain()
 
 	for {
 		var data []int16
@@ -101,7 +106,7 @@ func (p *PulsePlayer) runPlayback(params Params) {
 
 		b := int16ToBytes(data)
 
-		n, err := stream.Write(b)
+		n, err := p.stream.Write(b)
 		if err != nil {
 			p.errCh <- fmt.Errorf("can't write to pulseaudio playback stream: %s", err.Error())
 			return
@@ -109,6 +114,21 @@ func (p *PulsePlayer) runPlayback(params Params) {
 
 		if n != len(b) {
 			panic("unexpected write size from pulseaudio")
+		}
+	}
+}
+
+func (p *PulsePlayer) waitDone() {
+	for {
+		// interrupt pa_simple_write() blocked on suspended device
+		if p.stream != nil {
+			p.stream.Flush()
+		}
+
+		select {
+		case <-time.After(time.Millisecond * 50):
+		case <-p.doneCh:
+			return
 		}
 	}
 }

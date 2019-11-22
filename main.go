@@ -39,6 +39,7 @@ func mainWithCode() int {
 
 	stun := fset.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
 	ports := fset.String("ports", "", "use specific UDP port range (e.g. \"3100:3200\")")
+	overrideIP := fset.String("override-ip", "", "override IP address in SDP offer/answer")
 
 	rate := fset.Uint("rate", 48000, "sample rate")
 	channels := fset.Uint("chans", 2, "# of channels")
@@ -123,6 +124,7 @@ func mainWithCode() int {
 		StunURL:             *stun,
 		MinPort:             minPort,
 		MaxPort:             maxPort,
+		OverrideIP:          *overrideIP,
 		EnableWrite:         *source != "",
 		EnableRead:          *sink != "",
 		Rate:                int(*rate),

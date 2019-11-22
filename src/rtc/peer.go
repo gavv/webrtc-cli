@@ -16,8 +16,9 @@ import (
 type Params struct {
 	StunURL string
 
-	MinPort uint16
-	MaxPort uint16
+	MinPort    uint16
+	MaxPort    uint16
+	OverrideIP string
 
 	OfferSDP string
 
@@ -175,6 +176,10 @@ func NewPeer(params Params) (*Peer, error) {
 		if err := p.conn.SetLocalDescription(*p.offer); err != nil {
 			return nil, fmt.Errorf("can't set sdp offer: %s", err.Error())
 		}
+
+		if err := postprocessSDP(p.offer, params.OverrideIP); err != nil {
+			return nil, fmt.Errorf("can't process sdp offer: %s", err.Error())
+		}
 	} else {
 		if err := p.conn.SetRemoteDescription(*p.offer); err != nil {
 			return nil, fmt.Errorf("can't set sdp offer: %s", err.Error())
@@ -189,6 +194,10 @@ func NewPeer(params Params) (*Peer, error) {
 
 		if err := p.conn.SetLocalDescription(*p.answer); err != nil {
 			return nil, fmt.Errorf("can't set sdp answer: %s", err.Error())
+		}
+
+		if err := postprocessSDP(p.answer, params.OverrideIP); err != nil {
+			return nil, fmt.Errorf("can't process sdp answer: %s", err.Error())
 		}
 	}
 

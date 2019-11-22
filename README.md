@@ -211,6 +211,24 @@ $ webrtc-cli --answer \
     --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo
 ```
 
+#### Use lower latency
+
+```
+$ webrtc-cli \
+    --pulse-buf 20ms \
+    --source-frame 10ms --sink-frame 10ms \
+    --jitter-buf 20ms --max-drift 20ms \
+    ...
+```
+
+#### Force specific IP address and UDP port range
+
+```
+$ webrtc-cli --offer --override-ip 93.184.216.34 --ports 5100:5200 ...
+```
+
+This will restrict what UDP ports can be used to given range and override IP addresses of all ICE candidates in generated SDP offer to given IP.
+
 ## Dependencies
 
 Build tools:

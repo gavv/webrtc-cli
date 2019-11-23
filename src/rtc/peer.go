@@ -13,6 +13,16 @@ import (
 	"gopkg.in/gavv/opus.v2"
 )
 
+type State string
+
+func (s State) String() string {
+	return string(s)
+}
+
+func (s State) IsConnected() bool {
+	return s == State(webrtc.ICEConnectionStateConnected.String())
+}
+
 type Mode int
 
 const (
@@ -62,6 +72,7 @@ type Peer struct {
 	simulateLossPerc int
 
 	remoteTrackCh chan struct{}
+	connCh        chan State
 	closingCh     chan struct{}
 	closedCh      chan struct{}
 }
@@ -71,6 +82,7 @@ func NewPeer(params Params) (*Peer, error) {
 		channels:         params.Channels,
 		simulateLossPerc: params.SimulateLossPercent,
 		remoteTrackCh:    make(chan struct{}),
+		connCh:           make(chan State, 128),
 		closingCh:        make(chan struct{}),
 		closedCh:         make(chan struct{}),
 	}
@@ -173,10 +185,17 @@ func NewPeer(params Params) (*Peer, error) {
 
 	p.conn.OnICEConnectionStateChange(
 		func(connState webrtc.ICEConnectionState) {
-			fmt.Fprintf(os.Stderr, "ICE connection state changed to %s\n",
-				connState.String())
+			select {
+			case p.connCh <- State(connState.String()):
+			default:
+				select {
+				case p.connCh <- State(connState.String()):
+				case <-p.closingCh:
+				}
+			}
 
 			if connState == webrtc.ICEConnectionStateClosed {
+				close(p.connCh)
 				close(p.closedCh)
 			}
 		})
@@ -222,11 +241,17 @@ func NewPeer(params Params) (*Peer, error) {
 
 func (p *Peer) Close() error {
 	close(p.closingCh)
+
 	if err := p.conn.Close(); err != nil {
 		return err
 	}
+
 	<-p.closedCh
 	return nil
+}
+
+func (p *Peer) State() <-chan State {
+	return p.connCh
 }
 
 func (p *Peer) GetOffer() string {

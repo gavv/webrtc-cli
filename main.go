@@ -37,6 +37,8 @@ func mainWithCode() int {
 	source := fset.String("source", "", "pulseaudio source or input wav file")
 	sink := fset.String("sink", "", "pulseaudio sink")
 
+	timeout := fset.Duration("timeout", 0, "exit if can't connect during timeout")
+
 	stun := fset.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
 	ports := fset.String("ports", "", "use specific UDP port range (e.g. \"3100:3200\")")
 	overrideIP := fset.String("override-ip", "", "override IP address in SDP offer/answer")
@@ -217,16 +219,38 @@ func mainWithCode() int {
 		}
 	}
 
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	errCh := make(chan error, 32)
+	eofCh := make(chan struct{})
+
+	go func() {
+		var state rtc.State
+		var timeoutCh <-chan time.Time
+
+		for {
+			if state.IsConnected() {
+				timeoutCh = nil
+			} else if *timeout > 0 && timeoutCh == nil {
+				timeoutCh = time.After(*timeout)
+			}
+
+			select {
+			case state = <-peer.State():
+				printMsg("ICE connection state changed to " + state.String())
+
+			case <-timeoutCh:
+				errCh <- fmt.Errorf("can't connect to remote peer during %s", *timeout)
+				return
+			}
+		}
+	}()
+
 	if err := snd.SetPulseBufferSize(*pulseBuf); err != nil {
 		printErr(err)
 		return 1
 	}
-
-	sigCh := make(chan os.Signal, 2)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-
-	errCh := make(chan error, 4)
-	eofCh := make(chan struct{})
 
 	if *source != "" {
 		printMsg("Starting recording...")
@@ -430,7 +454,7 @@ func printErr(err error) {
 }
 
 func printErrMsg(s string) {
-	printMsg("Error " + s)
+	printMsg("Error: " + s)
 }
 
 func printMsg(s string) {

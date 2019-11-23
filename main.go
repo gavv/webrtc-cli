@@ -52,6 +52,10 @@ func mainWithCode() int {
 	maxDrift := fset.Duration("max-drift", 30*time.Millisecond,
 		"maximum jitter buffer drift")
 
+	modeStr := fset.String("mode", "voip", "opus encoder mode: voip|audio|lowdelay")
+
+	complexity := fset.Uint("complexity", 10, "opus encoder complexity")
+
 	lossPerc := fset.Uint("loss-perc", 25,
 		"expected packet loss percent, passed to opus encoder")
 
@@ -71,7 +75,7 @@ func mainWithCode() int {
 	}
 
 	if *offer == *answer {
-		printMsg("Error: exactly one of --offer and --answer options should be specified")
+		printErrMsg("exactly one of --offer and --answer options should be specified")
 		return 1
 	}
 
@@ -80,58 +84,69 @@ func mainWithCode() int {
 	if *ports != "" {
 		minPort, maxPort, err = parsePorts(*ports)
 		if err != nil {
-			printMsg("Error: invalid --ports: " + err.Error())
+			printErrMsg("invalid --ports: " + err.Error())
 			return 1
 		}
 	}
 
 	if *rate != 48000 && *rate != 96000 {
-		printMsg("Error: --rate should be 48000 or 96000")
+		printErrMsg("--rate should be 48000 or 96000")
 		return 1
 	}
 
 	if *channels != 1 && *channels != 2 {
-		printMsg("Error: --chans should be 1 or 2")
+		printErrMsg("--chans should be 1 or 2")
+		return 1
+	}
+
+	mode, err := parseMode(*modeStr)
+	if err != nil {
+		printErrMsg("invalid --mode: " + err.Error())
+		return 1
+	}
+
+	if *complexity > 10 {
+		printErrMsg("invalid --complexity: should be in [0; 10]")
 		return 1
 	}
 
 	if *lossPerc > 100 {
-		printMsg("Error: --loss-perc should be in [0; 100]")
+		printErrMsg("--loss-perc should be in [0; 100]")
 		return 1
 	}
 
 	if *simLossPerc > 100 {
-		printMsg("Error: --simulate-loss-perc should be in [0; 100]")
+		printErrMsg("--simulate-loss-perc should be in [0; 100]")
 		return 1
 	}
 
 	if fset.Changed("loss-perc") && *source == "" {
-		printMsg("Error: --loss-perc is only meaningful when --source is given")
+		printErrMsg("--loss-perc is only meaningful when --source is given")
 		return 1
 	}
 
 	if fset.Changed("simulate-loss-perc") && *sink == "" {
-		printMsg("Error: --simulate-loss-perc is only meaningful when --sink is given")
+		printErrMsg("--simulate-loss-perc is only meaningful when --sink is given")
 		return 1
 	}
 
 	if fset.Changed("source-frame") && *source == "" {
-		printMsg("Error: --source-frame is only meaningful when --source is given")
+		printErrMsg("--source-frame is only meaningful when --source is given")
 		return 1
 	}
 
 	if fset.Changed("sink-frame") && *sink == "" {
-		printMsg("Error: --sink-frame is only meaningful when --sink is given")
+		printErrMsg("--sink-frame is only meaningful when --sink is given")
 		return 1
 	}
 
 	if fset.Changed("jitter-buf") && *sink == "" {
-		printMsg("Error: --jitter-buf is only meaningful when --sink is given")
+		printErrMsg("--jitter-buf is only meaningful when --sink is given")
 		return 1
 	}
 
 	if fset.Changed("max-drift") && *sink == "" {
-		printMsg("Error: --max-drift is only meaningful when --sink is given")
+		printErrMsg("--max-drift is only meaningful when --sink is given")
 		return 1
 	}
 
@@ -144,6 +159,8 @@ func mainWithCode() int {
 		EnableRead:          *sink != "",
 		Rate:                int(*rate),
 		Channels:            int(*channels),
+		Mode:                mode,
+		Complexity:          int(*complexity),
 		LossPercent:         int(*lossPerc),
 		SimulateLossPercent: int(*simLossPerc),
 		Debug:               *debug,
@@ -356,6 +373,19 @@ func parsePorts(s string) (uint16, uint16, error) {
 	return uint16(minPort), uint16(maxPort), nil
 }
 
+func parseMode(s string) (rtc.Mode, error) {
+	switch s {
+	case "voip":
+		return rtc.ModeVoIP, nil
+	case "audio":
+		return rtc.ModeAudio, nil
+	case "lowdelay":
+		return rtc.ModeLowdelay, nil
+	default:
+		return rtc.Mode(-1), errors.New("should be voip|audio|lowdelay")
+	}
+}
+
 func readSDP() (string, error) {
 	tty := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
 
@@ -396,7 +426,11 @@ func printSDP(sdp string) error {
 }
 
 func printErr(err error) {
-	fmt.Fprintln(os.Stderr, "Error: "+err.Error())
+	printErrMsg(err.Error())
+}
+
+func printErrMsg(s string) {
+	printMsg("Error " + s)
 }
 
 func printMsg(s string) {

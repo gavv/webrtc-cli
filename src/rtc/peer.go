@@ -13,6 +13,14 @@ import (
 	"gopkg.in/gavv/opus.v2"
 )
 
+type Mode int
+
+const (
+	ModeVoIP     = Mode(opus.AppVoIP)
+	ModeAudio    = Mode(opus.AppAudio)
+	ModeLowdelay = Mode(opus.AppRestrictedLowdelay)
+)
+
 type Params struct {
 	StunURL string
 
@@ -25,8 +33,11 @@ type Params struct {
 	EnableWrite bool
 	EnableRead  bool
 
-	Rate        int
-	Channels    int
+	Rate     int
+	Channels int
+
+	Mode        Mode
+	Complexity  int
 	LossPercent int
 
 	SimulateLossPercent int
@@ -114,9 +125,14 @@ func NewPeer(params Params) (*Peer, error) {
 			return nil, fmt.Errorf("can't add local track to connection: %s", err.Error())
 		}
 
-		p.encoder, err = opus.NewEncoder(params.Rate, params.Channels, opus.AppAudio)
+		p.encoder, err = opus.NewEncoder(
+			params.Rate, params.Channels, opus.Application(params.Mode))
 		if err != nil {
 			return nil, fmt.Errorf("can't create opus encoder: %s", err.Error())
+		}
+
+		if err := p.encoder.SetComplexity(params.Complexity); err != nil {
+			return nil, fmt.Errorf("can't set complexity: %s", err.Error())
 		}
 
 		if enableFEC {

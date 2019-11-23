@@ -89,6 +89,8 @@ Usage of webrtc-cli:
       --jitter-buf duration       jitter buffer size (default 120ms)
       --pulse-buf duration        pulseaudio buffer size (default 20ms)
       --max-drift duration        maximum jitter buffer drift (default 30ms)
+      --mode string               opus encoder mode: voip|audio|lowdelay (default "voip")
+      --complexity uint           opus encoder complexity (default 10)
       --loss-perc uint            expected packet loss percent, passed to opus encoder (default 25)
       --simulate-loss-perc uint   simulate given loss percent when receiving packets
       --debug                     enable more logs

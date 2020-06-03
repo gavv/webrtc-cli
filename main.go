@@ -40,6 +40,10 @@ func mainWithCode() int {
 	timeout := fset.Duration("timeout", 0, "exit if can't connect during timeout")
 
 	stun := fset.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
+	ice := fset.String("ice", "stun:stun.l.google.com:19302", "STUN or TURN server URL")
+
+	_ = fset.MarkDeprecated("stun", "please use --ice instead")
+
 	ports := fset.String("ports", "", "use specific UDP port range (e.g. \"3100:3200\")")
 	overrideIP := fset.String("override-ip", "", "override IP address in SDP offer/answer")
 
@@ -152,8 +156,17 @@ func mainWithCode() int {
 		return 1
 	}
 
+	if fset.Changed("stun") && fset.Changed("ice") {
+		printErrMsg("--stun and --ice should not be used together")
+		return 1
+	}
+
+	if fset.Changed("stun") {
+		*ice = *stun
+	}
+
 	rtcParams := rtc.Params{
-		StunURL:             *stun,
+		IceURL:              *ice,
 		MinPort:             minPort,
 		MaxPort:             maxPort,
 		OverrideIP:          *overrideIP,

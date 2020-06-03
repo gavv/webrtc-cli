@@ -80,7 +80,7 @@ Usage of webrtc-cli:
       --source string             pulseaudio source or input wav file
       --sink string               pulseaudio sink
       --timeout duration          exit if can't connect during timeout
-      --stun string               STUN server URL (default "stun:stun.l.google.com:19302")
+      --ice string                STUN or TURN server URL (default "stun:stun.l.google.com:19302")
       --ports string              use specific UDP port range (e.g. "3100:3200")
       --override-ip string        override IP address in SDP offer/answer
       --rate uint                 sample rate (default 48000)

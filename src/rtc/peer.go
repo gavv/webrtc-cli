@@ -32,7 +32,7 @@ const (
 )
 
 type Params struct {
-	StunURL string
+	IceURL string
 
 	MinPort    uint16
 	MaxPort    uint16
@@ -118,7 +118,7 @@ func NewPeer(params Params) (*Peer, error) {
 	p.conn, err = api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
-				URLs: []string{params.StunURL},
+				URLs: []string{params.IceURL},
 			},
 		},
 	})

@@ -39,10 +39,12 @@ func mainWithCode() int {
 
 	timeout := fset.Duration("timeout", 0, "exit if can't connect during timeout")
 
-	stun := fset.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
-	ice := fset.String("ice", "stun:stun.l.google.com:19302", "STUN or TURN server URL")
-
+	stunURL := fset.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
 	_ = fset.MarkDeprecated("stun", "please use --ice instead")
+
+	iceURL := fset.String("ice", "stun:stun.l.google.com:19302", "STUN or TURN server URL")
+	iceUsername := fset.String("ice-username", "", "TURN server username")
+	icePassword := fset.String("ice-password", "", "TURN server password")
 
 	ports := fset.String("ports", "", "use specific UDP port range (e.g. \"3100:3200\")")
 	overrideIP := fset.String("override-ip", "", "override IP address in SDP offer/answer")
@@ -156,17 +158,19 @@ func mainWithCode() int {
 		return 1
 	}
 
-	if fset.Changed("stun") && fset.Changed("ice") {
-		printErrMsg("--stun and --ice should not be used together")
-		return 1
-	}
-
 	if fset.Changed("stun") {
-		*ice = *stun
+		if fset.Changed("ice") {
+			printErrMsg("--stun and --ice should not be used together;" +
+				" --stun is deprecated, use --ice")
+			return 1
+		}
+		*iceURL = *stunURL
 	}
 
 	rtcParams := rtc.Params{
-		IceURL:              *ice,
+		IceURL:              *iceURL,
+		IceUsername:         *iceUsername,
+		IcePassword:         *icePassword,
 		MinPort:             minPort,
 		MaxPort:             maxPort,
 		OverrideIP:          *overrideIP,

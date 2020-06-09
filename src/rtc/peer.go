@@ -32,7 +32,9 @@ const (
 )
 
 type Params struct {
-	IceURL string
+	IceURL      string
+	IceUsername string
+	IcePassword string
 
 	MinPort    uint16
 	MaxPort    uint16
@@ -115,12 +117,19 @@ func NewPeer(params Params) (*Peer, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(*mediaEngine),
 		webrtc.WithSettingEngine(settingEngine))
 
+	iceServer := webrtc.ICEServer{
+		URLs: []string{params.IceURL},
+	}
+	if params.IceUsername != "" {
+		iceServer.Username = params.IceUsername
+	}
+	if params.IcePassword != "" {
+		iceServer.CredentialType = webrtc.ICECredentialTypePassword
+		iceServer.Credential = params.IcePassword
+	}
+
 	p.conn, err = api.NewPeerConnection(webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{params.IceURL},
-			},
-		},
+		ICEServers: []webrtc.ICEServer{iceServer},
 	})
 	if err != nil {
 		return nil, err

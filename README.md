@@ -39,13 +39,15 @@ Operating systems:
 
 ## Installation
 
+#### From sources
+
 Install dependencies:
 
 ```
 $ sudo apt-get install gcc make pkg-config libopus-dev libopusfile-dev libpulse-dev
 ```
 
-Install [recent Go](https://github.com/golang/go/wiki/Ubuntu):
+Install [recent Go](https://github.com/golang/go/wiki/Ubuntu) (at least 1.12 is needed):
 
 ```
 $ sudo add-apt-repository ppa:longsleep/golang-backports
@@ -59,16 +61,37 @@ Clone and build:
 $ git clone https://github.com/gavv/webrtc-cli.git
 $ cd webrtc-cli
 $ make
+```
+
+Run the tool:
+
+```
 $ ./webrtc-cli -h
 ```
 
-Or, alternatively, install into GOPATH using `go get`:
+You can also install the tool system-wide, e.g.:
+
+```
+$ sudo cp ./webrtc-cli /usr/local/bin
+```
+
+#### Using go get
+
+Alternatively, you can install `webrtc-cli` into GOPATH using `go get`.
+
+First make sure that the Go version is at least 1.12:
+
+```
+$ go version
+```
+
+And then run this command:
 
 ```
 $ go get -v github.com/gavv/webrtc-cli
 ```
 
-The last command will fetch sources and build and install `webrtc-cli` executable into `$GOPATH/bin` directory or into `~/go/bin` if `$GOPATH` is not set.
+It will automatically fetch sources and build and install `webrtc-cli` executable into `$GOPATH/bin` directory or into `~/go/bin` if `$GOPATH` is not set.
 
 ## Options
 

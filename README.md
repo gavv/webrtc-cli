@@ -282,7 +282,7 @@ C libraries:
 
 This tool was initially developed for a freelance project. Big thanks to my customer who has kindly allowed to open-source it!
 
-I'm working on another related open-source project, [Roc](https://github.com/roc-project/roc). It offers a wider functionality and better service quality, but so far has no WebRTC support.
+I'm working on another related open-source project, [Roc Toolkit](https://github.com/roc-streaming/roc-toolkit). It offers a wider functionality and better service quality, but so far has no WebRTC support.
 
 ## Contributing
 

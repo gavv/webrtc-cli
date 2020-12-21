@@ -1,6 +1,6 @@
 # WebRTC command-line peer
 
-[![Build Status](https://travis-ci.org/gavv/webrtc-cli.svg?branch=master)](https://travis-ci.org/gavv/webrtc-cli)
+[![Build](https://github.com/gavv/webrtc-cli/workflows/build/badge.svg)](https://github.com/gavv/webrtc-cli/actions)
 
 `webrtc-cli` is a small command-line tool allowing to stream to and from audio devices and files via WebRTC.
 

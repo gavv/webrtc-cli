@@ -86,13 +86,15 @@
           }
 
           pc.createOffer(offerOpts).
-              then(setOffer).
+              then(setLocalDescription).
               catch(printLog)
       }
 
-      function setOffer(offer) {
-          pc.setLocalDescription(offer)
+      function setLocalDescription(offer) {
+          pc.setLocalDescription(offer).then(setOffer)
+      }
 
+      function setOffer(offer) {
           document.getElementById('offer').value = pc.localDescription.sdp
       }
 

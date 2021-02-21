@@ -1,11 +1,17 @@
 package vnet
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 
 	"github.com/pion/logging"
+)
+
+var (
+	errHostnameEmpty       = errors.New("host name must not be empty")
+	errFailedtoParseIPAddr = errors.New("failed to parse IP address")
 )
 
 type resolverConfig struct {
@@ -43,11 +49,11 @@ func (r *resolver) addHost(name string, ipAddr string) error {
 	defer r.mutex.Unlock()
 
 	if len(name) == 0 {
-		return fmt.Errorf("host name must not be empty")
+		return errHostnameEmpty
 	}
 	ip := net.ParseIP(ipAddr)
 	if ip == nil {
-		return fmt.Errorf("failed to parse IP address \"%s\"", ipAddr)
+		return fmt.Errorf("%w \"%s\"", errFailedtoParseIPAddr, ipAddr)
 	}
 	r.hosts[name] = ip
 	return nil

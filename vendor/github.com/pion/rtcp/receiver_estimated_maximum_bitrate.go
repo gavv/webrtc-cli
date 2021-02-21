@@ -3,7 +3,6 @@ package rtcp
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/bits"
 )
@@ -36,7 +35,7 @@ func (p ReceiverEstimatedMaximumBitrate) Marshal() (buf []byte, err error) {
 
 	// This will always be true but just to be safe.
 	if n != len(buf) {
-		return nil, errors.New("wrong marshal size")
+		return nil, errWrongMarshalSize
 	}
 
 	return buf, nil
@@ -71,7 +70,7 @@ func (p ReceiverEstimatedMaximumBitrate) MarshalTo(buf []byte) (n int, err error
 
 	size := p.MarshalSize()
 	if len(buf) < size {
-		return 0, errors.New("short buffer")
+		return 0, errPacketTooShort
 	}
 
 	buf[0] = 143 // v=2, p=0, fmt=15
@@ -158,30 +157,30 @@ func (p *ReceiverEstimatedMaximumBitrate) Unmarshal(buf []byte) (err error) {
 
 	// 20 bytes is the size of the packet with no SSRCs
 	if len(buf) < 20 {
-		return errors.New("buffer too short")
+		return errPacketTooShort
 	}
 
 	// version  must be 2
 	version := buf[0] >> 6
 	if version != 2 {
-		return errors.New("version must be 2")
+		return fmt.Errorf("%w expected(2) actual(%d)", errBadVersion, version)
 	}
 
 	// padding must be unset
 	padding := (buf[0] >> 5) & 1
 	if padding != 0 {
-		return errors.New("padding must be 0")
+		return fmt.Errorf("%w expected(0) actual(%d)", errWrongPadding, padding)
 	}
 
 	// fmt must be 15
-	fmt := buf[0] & 31
-	if fmt != 15 {
-		return errors.New("wrong feedback message type")
+	fmtVal := buf[0] & 31
+	if fmtVal != 15 {
+		return fmt.Errorf("%w expected(15) actual(%d)", errWrongFeedbackType, fmtVal)
 	}
 
 	// Must be payload specific feedback
 	if buf[1] != 206 {
-		return errors.New("wrong payload type")
+		return fmt.Errorf("%w expected(206) actual(%d)", errWrongPayloadType, buf[1])
 	}
 
 	// length is the number of 32-bit words, minus 1
@@ -190,12 +189,12 @@ func (p *ReceiverEstimatedMaximumBitrate) Unmarshal(buf []byte) (err error) {
 
 	// There's not way this could be legit
 	if size < 20 {
-		return errors.New("header length is too small")
+		return errHeaderTooSmall
 	}
 
 	// Make sure the buffer is large enough.
 	if len(buf) < size {
-		return errors.New("buffer too short")
+		return errPacketTooShort
 	}
 
 	// The sender SSRC is 32-bits
@@ -204,12 +203,12 @@ func (p *ReceiverEstimatedMaximumBitrate) Unmarshal(buf []byte) (err error) {
 	// The destination SSRC must be 0
 	media := binary.BigEndian.Uint32(buf[8:12])
 	if media != 0 {
-		return errors.New("media SSRC must be 0")
+		return errSSRCMustBeZero
 	}
 
 	// REMB rules all around me
 	if !bytes.Equal(buf[12:16], []byte{'R', 'E', 'M', 'B'}) {
-		return errors.New("missing REMB identifier")
+		return errMissingREMBidentifier
 	}
 
 	// The next byte is the number of SSRC entries at the end.
@@ -217,7 +216,7 @@ func (p *ReceiverEstimatedMaximumBitrate) Unmarshal(buf []byte) (err error) {
 
 	// Now we know the expected size, make sure they match.
 	if size != 20+4*num {
-		return errors.New("SSRC num and length do not match")
+		return errSSRCNumAndLengthMismatch
 	}
 
 	// Get the 6-bit exponent value.
@@ -259,11 +258,11 @@ func (p *ReceiverEstimatedMaximumBitrate) Header() Header {
 	}
 }
 
-// Keep a table of powers to units for fast conversion.
-var bitUnits = []string{"b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"}
-
 // String prints the REMB packet in a human-readable format.
 func (p *ReceiverEstimatedMaximumBitrate) String() string {
+	// Keep a table of powers to units for fast conversion.
+	bitUnits := []string{"b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"}
+
 	// Do some unit conversions because b/s is far too difficult to read.
 	bitrate := float64(p.Bitrate)
 	powers := 0

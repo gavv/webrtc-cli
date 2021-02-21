@@ -42,7 +42,7 @@ func (f tcpFlag) String() string {
 
 // Generate a base36-encoded unique tag
 // See: https://play.golang.org/p/0ZaAID1q-HN
-var assignChunkTag = func() func() string {
+var assignChunkTag = func() func() string { //nolint:gochecknoglobals
 	var tagCtr uint64
 
 	return func() string {
@@ -155,7 +155,7 @@ func (c *chunkUDP) Clone() Chunk {
 }
 
 func (c *chunkUDP) Network() string {
-	return "udp"
+	return udpString
 }
 
 func (c *chunkUDP) String() string {
@@ -170,7 +170,7 @@ func (c *chunkUDP) String() string {
 }
 
 func (c *chunkUDP) setSourceAddr(address string) error {
-	addr, err := net.ResolveUDPAddr("udp", address)
+	addr, err := net.ResolveUDPAddr(udpString, address)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (c *chunkUDP) setSourceAddr(address string) error {
 }
 
 func (c *chunkUDP) setDestinationAddr(address string) error {
-	addr, err := net.ResolveUDPAddr("udp", address)
+	addr, err := net.ResolveUDPAddr(udpString, address)
 	if err != nil {
 		return err
 	}
@@ -195,8 +195,8 @@ type chunkTCP struct {
 	destinationPort int
 	flags           tcpFlag // control bits
 	userData        []byte  // only with PSH flag
-	//seq             uint32  // always starts with 0
-	//ack             uint32  // always starts with 0
+	// seq             uint32  // always starts with 0
+	// ack             uint32  // always starts with 0
 }
 
 func newChunkTCP(srcAddr, dstAddr *net.TCPAddr, flags tcpFlag) *chunkTCP {

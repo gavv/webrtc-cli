@@ -2,6 +2,7 @@ package vnet
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -10,7 +11,26 @@ import (
 	"sync"
 )
 
-var macAddrCounter uint64 = 0xBEEFED910200
+const (
+	lo0String = "lo0String"
+	udpString = "udp"
+)
+
+var (
+	macAddrCounter                 uint64 = 0xBEEFED910200 //nolint:gochecknoglobals
+	errNoInterface                        = errors.New("no interface is available")
+	errNotFound                           = errors.New("not found")
+	errUnexpectedNetwork                  = errors.New("unexpected network")
+	errCantAssignRequestedAddr            = errors.New("can't assign requested address")
+	errUnknownNetwork                     = errors.New("unknown network")
+	errNoRouterLinked                     = errors.New("no router linked")
+	errInvalidPortNumber                  = errors.New("invalid port number")
+	errUnexpectedTypeSwitchFailure        = errors.New("unexpected type-switch failure")
+	errBindFailerFor                      = errors.New("bind failed for")
+	errEndPortLessThanStart               = errors.New("end port is less than the start")
+	errPortSpaceExhausted                 = errors.New("port space exhausted")
+	errVNetDisabled                       = errors.New("vnet is not enabled")
+)
 
 func newMACAddress() net.HardwareAddr {
 	b := make([]byte, 8)
@@ -29,7 +49,7 @@ type vNet struct {
 
 func (v *vNet) _getInterfaces() ([]*Interface, error) {
 	if len(v.interfaces) == 0 {
-		return nil, fmt.Errorf("no interface is available")
+		return nil, errNoInterface
 	}
 
 	return v.interfaces, nil
@@ -54,7 +74,7 @@ func (v *vNet) _getInterface(ifName string) (*Interface, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("interface %s not found", ifName)
+	return nil, fmt.Errorf("interface %s %w", ifName, errNotFound)
 }
 
 func (v *vNet) getInterface(ifName string) (*Interface, error) {
@@ -107,7 +127,7 @@ func (v *vNet) onInboundChunk(c Chunk) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	if c.Network() == "udp" {
+	if c.Network() == udpString {
 		if conn, ok := v.udpConns.find(c.DestinationAddr()); ok {
 			conn.onInboundChunk(c)
 		}
@@ -117,8 +137,8 @@ func (v *vNet) onInboundChunk(c Chunk) {
 // caller must hold the mutex
 func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
 	// validate network
-	if network != "udp" && network != "udp4" {
-		return nil, fmt.Errorf("unexpected network: %s", network)
+	if network != udpString && network != "udp4" {
+		return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
 	}
 
 	if locAddr == nil {
@@ -135,7 +155,7 @@ func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacke
 			Op:   "listen",
 			Net:  network,
 			Addr: locAddr,
-			Err:  fmt.Errorf("bind: can't assign requested address"),
+			Err:  fmt.Errorf("bind: %w", errCantAssignRequestedAddr),
 		}
 	}
 
@@ -156,7 +176,7 @@ func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacke
 			Op:   "listen",
 			Net:  network,
 			Addr: locAddr,
-			Err:  fmt.Errorf("bind: address already in use"),
+			Err:  fmt.Errorf("bind: %w", errAddressAlreadyInUse),
 		}
 	}
 
@@ -217,8 +237,8 @@ func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
 }
 
 func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-	if network != "udp" && network != "udp4" {
-		return nil, fmt.Errorf("unknown network %s", network)
+	if network != udpString && network != "udp4" {
+		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
 
 	host, sPort, err := net.SplitHostPort(address)
@@ -235,7 +255,7 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 		} else {
 			// host is a domain name. resolve IP address by the name
 			if v.router == nil {
-				return nil, fmt.Errorf("no router linked")
+				return nil, errNoRouterLinked
 			}
 
 			ip, err = v.router.resolver.lookUp(host)
@@ -247,7 +267,7 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 
 	port, err := strconv.Atoi(sPort)
 	if err != nil {
-		return nil, fmt.Errorf("invalid port number")
+		return nil, errInvalidPortNumber
 	}
 
 	udpAddr := &net.UDPAddr{
@@ -259,7 +279,7 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 }
 
 func (v *vNet) write(c Chunk) error {
-	if c.Network() == "udp" {
+	if c.Network() == udpString {
 		if udp, ok := c.(*chunkUDP); ok {
 			if c.getDestinationIP().IsLoopback() {
 				if conn, ok := v.udpConns.find(udp.DestinationAddr()); ok {
@@ -268,12 +288,12 @@ func (v *vNet) write(c Chunk) error {
 				return nil
 			}
 		} else {
-			return fmt.Errorf("unexpected type-switch failure")
+			return errUnexpectedTypeSwitchFailure
 		}
 	}
 
 	if v.router == nil {
-		return fmt.Errorf("no router linked")
+		return errNoRouterLinked
 	}
 
 	v.router.push(c)
@@ -281,7 +301,7 @@ func (v *vNet) write(c Chunk) error {
 }
 
 func (v *vNet) onClosed(addr net.Addr) {
-	if addr.Network() == "udp" {
+	if addr.Network() == udpString {
 		//nolint:errcheck
 		v.udpConns.delete(addr) // #nosec
 	}
@@ -342,7 +362,7 @@ func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
 }
 
 // caller must hold the mutex
-func (v *vNet) hasIPAddr(ip net.IP) bool {
+func (v *vNet) hasIPAddr(ip net.IP) bool { //nolint:gocognit
 	for _, ifc := range v.interfaces {
 		if addrs, err := ifc.Addrs(); err == nil {
 			for _, addr := range addrs {
@@ -387,7 +407,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	}
 
 	if len(ips) == 0 {
-		return fmt.Errorf("bind failed for %s", ip.String())
+		return fmt.Errorf("%w %s", errBindFailerFor, ip.String())
 	}
 
 	// check if all these transport addresses are not in use
@@ -399,9 +419,9 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 		if _, ok := v.udpConns.find(addr); ok {
 			return &net.OpError{
 				Op:   "bind",
-				Net:  "udp",
+				Net:  udpString,
 				Addr: addr,
-				Err:  fmt.Errorf("bind: address already in use"),
+				Err:  fmt.Errorf("bind: %w", errAddressAlreadyInUse),
 			}
 		}
 	}
@@ -413,11 +433,11 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 	// choose randomly from the range between start and end (inclusive)
 	if end < start {
-		return -1, fmt.Errorf("end port is less than the start")
+		return -1, errEndPortLessThanStart
 	}
 
 	space := end + 1 - start
-	offset := rand.Intn(space)
+	offset := rand.Intn(space) //nolint:gosec
 	for i := 0; i < space; i++ {
 		port := ((offset + i) % space) + start
 
@@ -427,7 +447,7 @@ func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 		}
 	}
 
-	return -1, fmt.Errorf("port space exhausted")
+	return -1, errPortSpaceExhausted
 }
 
 // NetConfig is a bag of configuration parameters passed to NewNet().
@@ -476,7 +496,7 @@ func NewNet(config *NetConfig) *Net {
 	lo0 := NewInterface(net.Interface{
 		Index:        1,
 		MTU:          16384,
-		Name:         "lo0",
+		Name:         lo0String,
 		HardwareAddr: nil,
 		Flags:        net.FlagUp | net.FlagLoopback | net.FlagMulticast,
 	})
@@ -534,7 +554,7 @@ func (n *Net) InterfaceByName(name string) (*Interface, error) {
 			}
 		}
 
-		return nil, fmt.Errorf("interface %s not found", name)
+		return nil, fmt.Errorf("interface %s %w", name, errNotFound)
 	}
 
 	return n.v.getInterface(name)
@@ -601,7 +621,7 @@ func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 
 func (n *Net) getInterface(ifName string) (*Interface, error) {
 	if n.v == nil {
-		return nil, fmt.Errorf("vnet is not enabled")
+		return nil, errVNetDisabled
 	}
 
 	return n.v.getInterface(ifName)
@@ -609,7 +629,7 @@ func (n *Net) getInterface(ifName string) (*Interface, error) {
 
 func (n *Net) setRouter(r *Router) error {
 	if n.v == nil {
-		return fmt.Errorf("vnet is not enabled")
+		return errVNetDisabled
 	}
 
 	return n.v.setRouter(r)

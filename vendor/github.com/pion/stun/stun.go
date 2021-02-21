@@ -7,7 +7,7 @@
 // low-level methods are available. On other hand, there are helpers that
 // reduce code repeat.
 //
-// See examples for Message for basic usage, or https://github.com/gortc/turn
+// See examples for Message for basic usage, or https://github.com/pion/turn
 // package for example of stun extension implementation.
 package stun
 
@@ -22,7 +22,7 @@ var bin = binary.BigEndian
 func readFullOrPanic(r io.Reader, v []byte) int {
 	n, err := io.ReadFull(r, v)
 	if err != nil {
-		panic(err)
+		panic(err) // nolint
 	}
 	return n
 }
@@ -30,7 +30,7 @@ func readFullOrPanic(r io.Reader, v []byte) int {
 func writeOrPanic(w io.Writer, v []byte) int {
 	n, err := w.Write(v)
 	if err != nil {
-		panic(err)
+		panic(err) // nolint
 	}
 	return n
 }

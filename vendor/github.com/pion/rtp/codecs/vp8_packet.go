@@ -1,9 +1,5 @@
 package codecs
 
-import (
-	"fmt"
-)
-
 // VP8Payloader payloads VP8 packets
 type VP8Payloader struct{}
 
@@ -13,7 +9,6 @@ const (
 
 // Payload fragments a VP8 packet across one or more byte arrays
 func (p *VP8Payloader) Payload(mtu int, payload []byte) [][]byte {
-
 	/*
 	 * https://tools.ietf.org/html/rfc7741#section-4.2
 	 *
@@ -86,13 +81,13 @@ type VP8Packet struct {
 // Unmarshal parses the passed byte slice and stores the result in the VP8Packet this method is called upon
 func (p *VP8Packet) Unmarshal(payload []byte) ([]byte, error) {
 	if payload == nil {
-		return nil, fmt.Errorf("invalid nil packet")
+		return nil, errNilPacket
 	}
 
 	payloadLen := len(payload)
 
 	if payloadLen < 4 {
-		return nil, fmt.Errorf("Payload is not large enough to container header")
+		return nil, errShortPacket
 	}
 
 	payloadIndex := 0
@@ -129,8 +124,20 @@ func (p *VP8Packet) Unmarshal(payload []byte) ([]byte, error) {
 	}
 
 	if payloadIndex >= payloadLen {
-		return nil, fmt.Errorf("Payload is not large enough")
+		return nil, errShortPacket
 	}
 	p.Payload = payload[payloadIndex:]
 	return p.Payload, nil
+}
+
+// VP8PartitionHeadChecker checks VP8 partition head
+type VP8PartitionHeadChecker struct{}
+
+// IsPartitionHead checks whether if this is a head of the VP8 partition
+func (*VP8PartitionHeadChecker) IsPartitionHead(packet []byte) bool {
+	p := &VP8Packet{}
+	if _, err := p.Unmarshal(packet); err != nil {
+		return false
+	}
+	return p.S == 1
 }

@@ -10,7 +10,7 @@
   <a href="https://pion.ly/slack"><img src="https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen" alt="Slack Widget"></a>
   <br>
   <a href="https://travis-ci.org/pion/rtcp"><img src="https://travis-ci.org/pion/rtcp.svg?branch=master" alt="Build Status"></a>
-  <a href="https://godoc.org/github.com/pion/rtcp"><img src="https://godoc.org/github.com/pion/rtcp?status.svg" alt="GoDoc"></a>
+  <a href="https://pkg.go.dev/github.com/pion/rtcp"><img src="https://godoc.org/github.com/pion/rtcp?status.svg" alt="GoDoc"></a>
   <a href="https://codecov.io/gh/pion/rtcp"><img src="https://codecov.io/gh/pion/rtcp/branch/master/graph/badge.svg" alt="Coverage Status"></a>
   <a href="https://goreportcard.com/report/github.com/pion/rtcp"><img src="https://goreportcard.com/badge/github.com/pion/rtcp" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
@@ -35,9 +35,15 @@ Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contribu
 * [Max Hawkins](https://github.com/maxhawkins) - *Original Author*
 * [Woodrow Douglass](https://github.com/wdouglass) *RTCP, RTP improvements, G.722 support, Bugfixes*
 * [Sean DuBois](https://github.com/Sean-Der) - *Linter fixes*
-* [adwpc](https://github.com/adwpc) - *Fix PictureLossIndication Unmarshal error*
+* [adwpc](https://github.com/adwpc)
 * [Luke Curley](https://github.com/kixelated)
 * [Hugo Arregui](https://github.com/hugoArregui)
+* [Atsushi Watanabe](https://github.com/at-wat)
+* [Juliusz Chroboczek](https://github.com/jech)
+* [Gabor Pongracz](https://github.com/pongraczgabor87)
+* [Simone Gotti](https://github.com/sgotti)
+* [lllf](https://github.com/LittleLightLittleFire)
+* [cnderrauber](https://github.com/cnderrauber)
 
 ### License
 MIT License - see [LICENSE](LICENSE) for full text

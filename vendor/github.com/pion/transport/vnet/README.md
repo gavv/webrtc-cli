@@ -181,7 +181,7 @@ func NetAgent(config *AgentConfig) *Agent {
 ```go
 // a.net is the instance of vnet.Net class
 func (a *Agent) listenUDP(...) error {
-    conn, err := a.net.ListenPacket("udp", ...)
+    conn, err := a.net.ListenPacket(udpString, ...)
     if err != nil {
         return nil, err
     }

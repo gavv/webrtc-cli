@@ -35,17 +35,56 @@ type TransportLayerNack struct {
 
 var _ Packet = (*TransportLayerNack)(nil) // assert is a Packet
 
-// PacketList returns a list of Nack'd packets that's referenced by a NackPair
-func (n *NackPair) PacketList() []uint16 {
-	out := make([]uint16, 1, 17)
-	out[0] = n.PacketID
+// NackPairsFromSequenceNumbers generates a slice of NackPair from a list of SequenceNumbers
+// This handles generating the proper values for PacketID/LostPackets
+func NackPairsFromSequenceNumbers(sequenceNumbers []uint16) (pairs []NackPair) {
+	if len(sequenceNumbers) == 0 {
+		return []NackPair{}
+	}
+
+	nackPair := &NackPair{PacketID: sequenceNumbers[0]}
+	for i := 1; i < len(sequenceNumbers); i++ {
+		m := sequenceNumbers[i]
+
+		if m-nackPair.PacketID > 16 {
+			pairs = append(pairs, *nackPair)
+			nackPair = &NackPair{PacketID: m}
+			continue
+		}
+
+		nackPair.LostPackets |= 1 << (m - nackPair.PacketID - 1)
+	}
+	pairs = append(pairs, *nackPair)
+	return
+}
+
+// Range calls f sequentially for each sequence number covered by n.
+// If f returns false, Range stops the iteration.
+func (n *NackPair) Range(f func(seqno uint16) bool) {
+	more := f(n.PacketID)
+	if !more {
+		return
+	}
+
 	b := n.LostPackets
 	for i := uint16(0); b != 0; i++ {
 		if (b & (1 << i)) != 0 {
 			b &^= (1 << i)
-			out = append(out, n.PacketID+i+1)
+			more = f(n.PacketID + i + 1)
+			if !more {
+				return
+			}
 		}
 	}
+}
+
+// PacketList returns a list of Nack'd packets that's referenced by a NackPair
+func (n *NackPair) PacketList() []uint16 {
+	out := make([]uint16, 0, 17)
+	n.Range(func(seqno uint16) bool {
+		out = append(out, seqno)
+		return true
+	})
 	return out
 }
 
@@ -56,7 +95,6 @@ const (
 
 // Marshal encodes the TransportLayerNack in binary
 func (p TransportLayerNack) Marshal() ([]byte, error) {
-
 	if len(p.Nacks)+tlnLength > math.MaxUint8 {
 		return nil, errTooManyReports
 	}
@@ -123,7 +161,7 @@ func (p *TransportLayerNack) Header() Header {
 func (p TransportLayerNack) String() string {
 	out := fmt.Sprintf("TransportLayerNack from %x\n", p.SenderSSRC)
 	out += fmt.Sprintf("\tMedia Ssrc %x\n", p.MediaSSRC)
-	out += fmt.Sprintf("\tID\tLostPackets\n")
+	out += "\tID\tLostPackets\n"
 	for _, i := range p.Nacks {
 		out += fmt.Sprintf("\t%d\t%b\n", i.PacketID, i.LostPackets)
 	}

@@ -1,9 +1,11 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"net"
 )
+
+var errNoAddressAssigned = errors.New("no address assigned")
 
 // See: https://play.golang.org/p/nBO9KGYEziv
 
@@ -32,7 +34,7 @@ func (ifc *Interface) AddAddr(addr net.Addr) {
 // Addrs ...
 func (ifc *Interface) Addrs() ([]net.Addr, error) {
 	if len(ifc.addrs) == 0 {
-		return nil, fmt.Errorf("no address assigned")
+		return nil, errNoAddressAssigned
 	}
 	return ifc.addrs, nil
 }

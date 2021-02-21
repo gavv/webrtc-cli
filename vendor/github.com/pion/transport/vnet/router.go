@@ -1,6 +1,7 @@
 package vnet
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -16,8 +17,19 @@ const (
 	defaultRouterQueueSize = 0 // unlimited
 )
 
+var (
+	errInvalidLocalIPinStaticIPs     = errors.New("invalid local IP in StaticIPs")
+	errLocalIPBeyondStaticIPsSubset  = errors.New("mapped in StaticIPs is beyond subnet")
+	errLocalIPNoStaticsIPsAssociated = errors.New("all StaticIPs must have associated local IPs")
+	errRouterAlreadyStarted          = errors.New("router already started")
+	errRouterAlreadyStopped          = errors.New("router already stopped")
+	errStaticIPisBeyondSubnet        = errors.New("static IP is beyond subnet")
+	errAddressSpaceExhausted         = errors.New("address space exhausted")
+	errNoIPAddrEth0                  = errors.New("no IP address is assigned for eth0")
+)
+
 // Generate a unique router name
-var assignRouterName = func() func() string {
+var assignRouterName = func() func() string { //nolint:gochecknoglobals
 	var routerIDCtr uint64
 
 	return func() string {
@@ -107,7 +119,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 	lo0 := NewInterface(net.Interface{
 		Index:        1,
 		MTU:          16384,
-		Name:         "lo0",
+		Name:         lo0String,
 		HardwareAddr: nil,
 		Flags:        net.FlagUp | net.FlagLoopback | net.FlagMulticast,
 	})
@@ -140,10 +152,10 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 			if len(ipPair) > 1 {
 				locIP := net.ParseIP(ipPair[1])
 				if locIP == nil {
-					return nil, fmt.Errorf("invalid local IP in StaticIPs")
+					return nil, errInvalidLocalIPinStaticIPs
 				}
 				if !ipv4Net.Contains(locIP) {
-					return nil, fmt.Errorf("local IP %s mapped in StaticIPs is beyond subnet", locIP.String())
+					return nil, fmt.Errorf("local IP %s %w", locIP.String(), errLocalIPBeyondStaticIPsSubset)
 				}
 				staticLocalIPs[ip.String()] = locIP
 			}
@@ -159,7 +171,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 
 	if nStaticLocal := len(staticLocalIPs); nStaticLocal > 0 {
 		if nStaticLocal != len(staticIPs) {
-			return nil, fmt.Errorf("all StaticIPs must have associated local IPs")
+			return nil, errLocalIPNoStaticsIPsAssociated
 		}
 	}
 
@@ -184,7 +196,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 // caller must hold the mutex
 func (r *Router) getInterfaces() ([]*Interface, error) {
 	if len(r.interfaces) == 0 {
-		return nil, fmt.Errorf("no interface is available")
+		return nil, fmt.Errorf("%w is available", errNoInterface)
 	}
 
 	return r.interfaces, nil
@@ -204,7 +216,7 @@ func (r *Router) getInterface(ifName string) (*Interface, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("interface %s not found", ifName)
+	return nil, fmt.Errorf("interface %s %w", ifName, errNotFound)
 }
 
 // Start ...
@@ -213,7 +225,7 @@ func (r *Router) Start() error {
 	defer r.mutex.Unlock()
 
 	if r.stopFunc != nil {
-		return fmt.Errorf("router already staretd")
+		return errRouterAlreadyStarted
 	}
 
 	cancelCh := make(chan struct{})
@@ -263,7 +275,7 @@ func (r *Router) Stop() error {
 	defer r.mutex.Unlock()
 
 	if r.stopFunc == nil {
-		return fmt.Errorf("router already stopped")
+		return errRouterAlreadyStopped
 	}
 
 	for _, router := range r.children {
@@ -301,7 +313,7 @@ func (r *Router) addNIC(nic NIC) error {
 
 	for _, ip := range ips {
 		if !r.ipv4Net.Contains(ip) {
-			return fmt.Errorf("static IP is beyond subnet: %s", r.ipv4Net.String())
+			return fmt.Errorf("%w: %s", errStaticIPisBeyondSubnet, r.ipv4Net.String())
 		}
 
 		ifc.AddAddr(&net.IPNet{
@@ -367,7 +379,7 @@ func (r *Router) assignIPAddress() (net.IP, error) {
 	// See: https://stackoverflow.com/questions/14915188/ip-address-ending-with-zero
 
 	if r.lastID == 0xfe {
-		return nil, fmt.Errorf("address space exhausted")
+		return nil, errAddressSpaceExhausted
 	}
 
 	ip := make(net.IP, 4)
@@ -401,7 +413,7 @@ func (r *Router) processChunks() (time.Duration, error) {
 
 	// Introduce jitter by delaying the processing of chunks.
 	if r.maxJitter > 0 {
-		jitter := time.Duration(rand.Int63n(int64(r.maxJitter)))
+		jitter := time.Duration(rand.Int63n(int64(r.maxJitter))) //nolint:gosec
 		time.Sleep(jitter)
 	}
 
@@ -491,6 +503,7 @@ func (r *Router) processChunks() (time.Duration, error) {
 			continue
 		}
 
+		//nolint:godox
 		/* FIXME: this implementation would introduce a duplicate packet!
 		if r.nat.natType.Hairpining {
 			hairpinned, err := r.nat.translateInbound(toParent)
@@ -526,7 +539,7 @@ func (r *Router) setRouter(parent *Router) error {
 	}
 
 	if len(ifc.addrs) == 0 {
-		return fmt.Errorf("no IP address is assigned for eth0")
+		return errNoIPAddrEth0
 	}
 
 	mappedIPs := []net.IP{}

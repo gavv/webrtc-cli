@@ -1,3 +1,4 @@
+// Package datachannel implements WebRTC Data Channels
 package datachannel
 
 import (
@@ -60,23 +61,6 @@ type Config struct {
 }
 
 func newDataChannel(stream *sctp.Stream, config *Config) (*DataChannel, error) {
-	switch config.ChannelType {
-	case ChannelTypeReliable:
-		stream.SetReliabilityParams(false, sctp.ReliabilityTypeReliable, config.ReliabilityParameter)
-	case ChannelTypeReliableUnordered:
-		stream.SetReliabilityParams(true, sctp.ReliabilityTypeReliable, config.ReliabilityParameter)
-	case ChannelTypePartialReliableRexmit:
-		stream.SetReliabilityParams(false, sctp.ReliabilityTypeRexmit, config.ReliabilityParameter)
-	case ChannelTypePartialReliableRexmitUnordered:
-		stream.SetReliabilityParams(true, sctp.ReliabilityTypeRexmit, config.ReliabilityParameter)
-	case ChannelTypePartialReliableTimed:
-		stream.SetReliabilityParams(false, sctp.ReliabilityTypeTimed, config.ReliabilityParameter)
-	case ChannelTypePartialReliableTimedUnordered:
-		stream.SetReliabilityParams(true, sctp.ReliabilityTypeTimed, config.ReliabilityParameter)
-	default:
-		return nil, fmt.Errorf("unable to create datachannel, invalid ChannelType: %v ", config.ChannelType)
-	}
-
 	return &DataChannel{
 		Config: *config,
 		stream: stream,
@@ -172,8 +156,12 @@ func Server(stream *sctp.Stream, config *Config) (*DataChannel, error) {
 	if err != nil {
 		return nil, err
 	}
-	return dataChannel, nil
 
+	err = dataChannel.commitReliabilityParams()
+	if err != nil {
+		return nil, err
+	}
+	return dataChannel, nil
 }
 
 // Read reads a packet of len(p) bytes as binary data
@@ -209,6 +197,10 @@ func (c *DataChannel) ReadDataChannel(p []byte) (int, bool, error) {
 			continue
 		case sctp.PayloadTypeWebRTCString, sctp.PayloadTypeWebRTCStringEmpty:
 			isString = true
+		}
+		switch ppi {
+		case sctp.PayloadTypeWebRTCBinaryEmpty, sctp.PayloadTypeWebRTCStringEmpty:
+			n = 0
 		}
 
 		atomic.AddUint32(&c.messagesReceived, 1)
@@ -251,15 +243,21 @@ func (c *DataChannel) handleDCEP(data []byte) error {
 
 	switch msg := msg.(type) {
 	case *channelOpen:
+		c.log.Debug("Received DATA_CHANNEL_OPEN")
 		err = c.writeDataChannelAck()
 		if err != nil {
 			return fmt.Errorf("failed to ACK channel open: %v", err)
 		}
-		// TODO: Should not happen?
+		// Note: DATA_CHANNEL_OPEN message is handled inside Server() method.
+		// Therefore, the message will not reach here.
 
 	case *channelAck:
+		c.log.Debug("Received DATA_CHANNEL_ACK")
+		err = c.commitReliabilityParams()
+		if err != nil {
+			return err
+		}
 		// TODO: handle ChannelAck (https://tools.ietf.org/html/draft-ietf-rtcweb-data-protocol-09#section-5.2)
-		// TODO: handle?
 
 	default:
 		return fmt.Errorf("unhandled DataChannel message %v", msg)
@@ -297,6 +295,10 @@ func (c *DataChannel) WriteDataChannel(p []byte, isString bool) (n int, err erro
 	atomic.AddUint32(&c.messagesSent, 1)
 	atomic.AddUint64(&c.bytesSent, uint64(len(p)))
 
+	if len(p) == 0 {
+		_, err := c.stream.WriteSCTP([]byte{0}, ppi)
+		return 0, err
+	}
 	return c.stream.WriteSCTP(p, ppi)
 }
 
@@ -353,4 +355,24 @@ func (c *DataChannel) SetBufferedAmountLowThreshold(th uint64) {
 // number of bytes of outgoing data buffered is lower than the threshold.
 func (c *DataChannel) OnBufferedAmountLow(f func()) {
 	c.stream.OnBufferedAmountLow(f)
+}
+
+func (c *DataChannel) commitReliabilityParams() error {
+	switch c.Config.ChannelType {
+	case ChannelTypeReliable:
+		c.stream.SetReliabilityParams(false, sctp.ReliabilityTypeReliable, c.Config.ReliabilityParameter)
+	case ChannelTypeReliableUnordered:
+		c.stream.SetReliabilityParams(true, sctp.ReliabilityTypeReliable, c.Config.ReliabilityParameter)
+	case ChannelTypePartialReliableRexmit:
+		c.stream.SetReliabilityParams(false, sctp.ReliabilityTypeRexmit, c.Config.ReliabilityParameter)
+	case ChannelTypePartialReliableRexmitUnordered:
+		c.stream.SetReliabilityParams(true, sctp.ReliabilityTypeRexmit, c.Config.ReliabilityParameter)
+	case ChannelTypePartialReliableTimed:
+		c.stream.SetReliabilityParams(false, sctp.ReliabilityTypeTimed, c.Config.ReliabilityParameter)
+	case ChannelTypePartialReliableTimedUnordered:
+		c.stream.SetReliabilityParams(true, sctp.ReliabilityTypeTimed, c.Config.ReliabilityParameter)
+	default:
+		return fmt.Errorf("invalid ChannelType: %v ", c.Config.ChannelType)
+	}
+	return nil
 }

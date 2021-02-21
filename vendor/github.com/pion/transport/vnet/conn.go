@@ -1,7 +1,7 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"math"
 	"net"
@@ -13,7 +13,14 @@ const (
 	maxReadQueueSize = 1024
 )
 
-var noDeadline time.Time
+var (
+	errObsCannotBeNil       = errors.New("obs cannot be nil")
+	errUseClosedNetworkConn = errors.New("use of closed network connection")
+	errAddrNotUDPAddr       = errors.New("addr is not a net.UDPAddr")
+	errLocAddr              = errors.New("something went wrong with locAddr")
+	errAlreadyClosed        = errors.New("already closed")
+	errNoRemAddr            = errors.New("no remAddr defined")
+)
 
 // UDPPacketConn is packet-oriented connection for UDP.
 type UDPPacketConn interface {
@@ -36,14 +43,15 @@ type UDPConn struct {
 	locAddr   *net.UDPAddr // read-only
 	remAddr   *net.UDPAddr // read-only
 	obs       connObserver // read-only
-	readCh    chan Chunk   // requires mutex for writers
-	muReadCh  sync.Mutex   // to mutex readCh writers
+	readCh    chan Chunk   // thread-safe
+	closed    bool         // requires mutex
+	mu        sync.Mutex   // to mutex closed flag
 	readTimer *time.Timer  // thread-safe
 }
 
 func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
 	if obs == nil {
-		return nil, fmt.Errorf("obs cannot be nil")
+		return nil, errObsCannotBeNil
 	}
 
 	return &UDPConn{
@@ -101,7 +109,7 @@ loop:
 		Op:   "read",
 		Net:  c.locAddr.Network(),
 		Addr: c.locAddr,
-		Err:  fmt.Errorf("use of closed network connection"),
+		Err:  errUseClosedNetworkConn,
 	}
 }
 
@@ -113,12 +121,12 @@ loop:
 func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	dstAddr, ok := addr.(*net.UDPAddr)
 	if !ok {
-		return 0, fmt.Errorf("addr is not a net.UDPAddr")
+		return 0, errAddrNotUDPAddr
 	}
 
 	srcIP := c.obs.determineSourceIP(c.locAddr.IP, dstAddr.IP)
 	if srcIP == nil {
-		return 0, fmt.Errorf("something went wrong with locAddr")
+		return 0, errLocAddr
 	}
 	srcAddr := &net.UDPAddr{
 		IP:   srcIP,
@@ -136,23 +144,17 @@ func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
 // Close closes the connection.
 // Any blocked ReadFrom or WriteTo operations will be unblocked and return errors.
-// See: https://play.golang.org/p/GrCRAII0VSN
 func (c *UDPConn) Close() error {
-loop:
-	for {
-		select {
-		case _, ok := <-c.readCh:
-			if !ok {
-				return fmt.Errorf("already closed")
-			}
-		default:
-			c.muReadCh.Lock()
-			close(c.readCh)
-			c.muReadCh.Unlock()
-			c.obs.onClosed(c.locAddr)
-			break loop
-		}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return errAlreadyClosed
 	}
+	c.closed = true
+	close(c.readCh)
+
+	c.obs.onClosed(c.locAddr)
 	return nil
 }
 
@@ -185,6 +187,7 @@ func (c *UDPConn) SetDeadline(t time.Time) error {
 // A zero value for t means ReadFrom will not time out.
 func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	var d time.Duration
+	var noDeadline time.Time
 	if t == noDeadline {
 		d = time.Duration(math.MaxInt64)
 	} else {
@@ -222,15 +225,19 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 // after a fixed time limit; see SetDeadline and SetWriteDeadline.
 func (c *UDPConn) Write(b []byte) (int, error) {
 	if c.remAddr == nil {
-		return 0, fmt.Errorf("no remAddr defined")
+		return 0, errNoRemAddr
 	}
 
 	return c.WriteTo(b, c.remAddr)
 }
 
 func (c *UDPConn) onInboundChunk(chunk Chunk) {
-	c.muReadCh.Lock()
-	defer c.muReadCh.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return
+	}
 
 	select {
 	case c.readCh <- chunk:

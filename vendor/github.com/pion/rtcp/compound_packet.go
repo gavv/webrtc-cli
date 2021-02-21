@@ -66,7 +66,7 @@ func (c CompoundPacket) Validate() error {
 	return errMissingCNAME
 }
 
-//CNAME returns the CNAME that *must* be present in every CompoundPacket
+// CNAME returns the CNAME that *must* be present in every CompoundPacket
 func (c CompoundPacket) CNAME() (string, error) {
 	var err error
 
@@ -109,7 +109,6 @@ func (c *CompoundPacket) Unmarshal(rawData []byte) error {
 	out := make(CompoundPacket, 0)
 	for len(rawData) != 0 {
 		p, processed, err := unmarshal(rawData)
-
 		if err != nil {
 			return err
 		}

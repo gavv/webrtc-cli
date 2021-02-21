@@ -113,7 +113,6 @@ func (g *Goodbye) Unmarshal(rawPacket []byte) error {
 		}
 
 		g.Reason = string(rawPacket[reasonOffset+1 : reasonEnd])
-
 	}
 
 	return nil

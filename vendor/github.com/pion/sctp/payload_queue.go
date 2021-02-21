@@ -142,6 +142,7 @@ func (q *payloadQueue) markAsAcked(tsn uint32) int {
 	var nBytesAcked int
 	if c, ok := q.chunkMap[tsn]; ok {
 		c.acked = true
+		c.retransmit = false
 		nBytesAcked = len(c.userData)
 		q.nBytes -= nBytesAcked
 		c.userData = []byte{}
@@ -162,7 +163,7 @@ func (q *payloadQueue) getLastTSNReceived() (uint32, bool) {
 
 func (q *payloadQueue) markAllToRetrasmit() {
 	for _, c := range q.chunkMap {
-		if c.acked || c.abandoned {
+		if c.acked || c.abandoned() {
 			continue
 		}
 		c.retransmit = true

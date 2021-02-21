@@ -1,12 +1,22 @@
 package vnet
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/pion/logging"
+)
+
+var (
+	errNATRequriesMapping            = errors.New("1:1 NAT requires more than one mapping")
+	errMismatchLengthIP              = errors.New("length mismtach between mappedIPs and localIPs")
+	errNonUDPTranslationNotSupported = errors.New("non-udp translation is not supported yet")
+	errNoAssociatedLocalAddress      = errors.New("no associated local address")
+	errNoNATBindingFound             = errors.New("no NAT binding found")
+	errHasNoPermission               = errors.New("has no permission")
 )
 
 // EndpointDependencyType defines a type of behavioral dependendency on the
@@ -93,10 +103,10 @@ func newNAT(config *natConfig) (*networkAddressTranslator, error) {
 		natType.MappingLifeTime = 0
 
 		if len(config.mappedIPs) == 0 {
-			return nil, fmt.Errorf("1:1 NAT requires more than one mapping")
+			return nil, errNATRequriesMapping
 		}
 		if len(config.mappedIPs) != len(config.localIPs) {
-			return nil, fmt.Errorf("length mismtach between mappedIPs and localIPs")
+			return nil, errMismatchLengthIP
 		}
 	} else {
 		// Normal (NAPT) behavior
@@ -141,7 +151,7 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 
 	to := from.Clone()
 
-	if from.Network() == "udp" {
+	if from.Network() == udpString {
 		if n.natType.Mode == NATModeNAT1To1 {
 			// 1:1 NAT behavior
 			srcAddr := from.SourceAddr().(*net.UDPAddr)
@@ -219,11 +229,7 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 		return to, nil
 	}
 
-	// TODO
-	//if c.Network() == "tcp" {
-	//}
-
-	return nil, fmt.Errorf("non-udp translation is not supported yet")
+	return nil, errNonUDPTranslationNotSupported
 }
 
 func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
@@ -232,13 +238,13 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 
 	to := from.Clone()
 
-	if from.Network() == "udp" {
+	if from.Network() == udpString {
 		if n.natType.Mode == NATModeNAT1To1 {
 			// 1:1 NAT behavior
 			dstAddr := from.DestinationAddr().(*net.UDPAddr)
 			dstIP := n.getPairedLocalIP(dstAddr.IP)
 			if dstIP == nil {
-				return nil, fmt.Errorf("drop %s as no associated local address", from.String())
+				return nil, fmt.Errorf("drop %s as %w", from.String(), errNoAssociatedLocalAddress)
 			}
 			dstPort := from.DestinationAddr().(*net.UDPAddr).Port
 			if err := to.setDestinationAddr(fmt.Sprintf("%s:%d", dstIP, dstPort)); err != nil {
@@ -249,7 +255,7 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 			iKey := fmt.Sprintf("udp:%s", from.DestinationAddr().String())
 			m := n.findInboundMapping(iKey)
 			if m == nil {
-				return nil, fmt.Errorf("drop %s as no NAT binding found", from.String())
+				return nil, fmt.Errorf("drop %s as %w", from.String(), errNoNATBindingFound)
 			}
 
 			var filterKey string
@@ -263,7 +269,7 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 			}
 
 			if _, ok := m.filters[filterKey]; !ok {
-				return nil, fmt.Errorf("drop %s as the remote %s has no permission", from.String(), filterKey)
+				return nil, fmt.Errorf("drop %s as the remote %s %w", from.String(), filterKey, errHasNoPermission)
 			}
 
 			// See RFC 4847 Section 4.3.  Mapping Refresh
@@ -284,11 +290,7 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 		return to, nil
 	}
 
-	// TODO
-	//if c.Network() == "tcp" {
-	//}
-
-	return nil, fmt.Errorf("non-udp translation is not supported yet")
+	return nil, errNonUDPTranslationNotSupported
 }
 
 // caller must hold the mutex

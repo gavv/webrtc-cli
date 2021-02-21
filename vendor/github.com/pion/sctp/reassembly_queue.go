@@ -1,10 +1,11 @@
 package sctp
 
 import (
-	"fmt"
 	"io"
 	"sort"
 	"sync/atomic"
+
+	"github.com/pkg/errors"
 )
 
 func sortChunksByTSN(a []*chunkPayloadData) {
@@ -104,6 +105,8 @@ type reassemblyQueue struct {
 	unorderedChunks []*chunkPayloadData
 	nBytes          uint64
 }
+
+var errTryAgain = errors.New("try again")
 
 func newReassemblyQueue(si uint16) *reassemblyQueue {
 	// From RFC 4960 Sec 6.5:
@@ -251,24 +254,25 @@ func (r *reassemblyQueue) isReadable() bool {
 func (r *reassemblyQueue) read(buf []byte) (int, PayloadProtocolIdentifier, error) {
 	var cset *chunkSet
 	// Check unordered first
-	if len(r.unordered) > 0 {
+	switch {
+	case len(r.unordered) > 0:
 		cset = r.unordered[0]
 		r.unordered = r.unordered[1:]
-	} else if len(r.ordered) > 0 {
+	case len(r.ordered) > 0:
 		// Now, check ordered
 		cset = r.ordered[0]
 		if !cset.isComplete() {
-			return 0, 0, fmt.Errorf("try again")
+			return 0, 0, errTryAgain
 		}
 		if sna16GT(cset.ssn, r.nextSSN) {
-			return 0, 0, fmt.Errorf("try again")
+			return 0, 0, errTryAgain
 		}
 		r.ordered = r.ordered[1:]
 		if cset.ssn == r.nextSSN {
 			r.nextSSN++
 		}
-	} else {
-		return 0, 0, fmt.Errorf("try again")
+	default:
+		return 0, 0, errTryAgain
 	}
 
 	// Concat all fragments into the buffer
@@ -290,51 +294,48 @@ func (r *reassemblyQueue) read(buf []byte) (int, PayloadProtocolIdentifier, erro
 	return nWritten, ppi, err
 }
 
-func (r *reassemblyQueue) forwardTSN(newCumulativeTSN uint32, unordered bool, lastSSN uint16) {
-	if unordered {
-		// This stream is configured to use unordered data. (The given SSN
-		// has no significance)
-		// Remove all fragments in the unordered sets that contains chunks
-		// equal to or older than `newCumulativeTSN`.
-		// We know all sets in the r.unordered are complete ones.
-		// Just remove chunks that are equal to or older than newCumulativeTSN
-		// from the unorderedChunks
-		lastIdx := -1
-		for i, c := range r.unorderedChunks {
-			if sna32GT(c.tsn, newCumulativeTSN) {
-				break
-			}
-			lastIdx = i
-		}
-		if lastIdx >= 0 {
-			for _, c := range r.unorderedChunks[0 : lastIdx+1] {
-				r.subtractNumBytes(len(c.userData))
-			}
-			r.unorderedChunks = r.unorderedChunks[lastIdx+1:]
-		}
-	} else {
-		// This stream is configured to use ordered data.
-		// Use lastSSN to locate a chunkSet then remove it if the set has
-		// not been complete
-		keep := []*chunkSet{}
-		for _, set := range r.ordered {
-			if sna16LTE(set.ssn, lastSSN) {
-				if !set.isComplete() {
-					// drop the set
-					for _, c := range set.chunks {
-						r.subtractNumBytes(len(c.userData))
-					}
-					continue
+func (r *reassemblyQueue) forwardTSNForOrdered(lastSSN uint16) {
+	// Use lastSSN to locate a chunkSet then remove it if the set has
+	// not been complete
+	keep := []*chunkSet{}
+	for _, set := range r.ordered {
+		if sna16LTE(set.ssn, lastSSN) {
+			if !set.isComplete() {
+				// drop the set
+				for _, c := range set.chunks {
+					r.subtractNumBytes(len(c.userData))
 				}
+				continue
 			}
-			keep = append(keep, set)
 		}
-		r.ordered = keep
+		keep = append(keep, set)
+	}
+	r.ordered = keep
 
-		// Finally, forward nextSSN
-		if sna16LTE(r.nextSSN, lastSSN) {
-			r.nextSSN = lastSSN + 1
+	// Finally, forward nextSSN
+	if sna16LTE(r.nextSSN, lastSSN) {
+		r.nextSSN = lastSSN + 1
+	}
+}
+
+func (r *reassemblyQueue) forwardTSNForUnordered(newCumulativeTSN uint32) {
+	// Remove all fragments in the unordered sets that contains chunks
+	// equal to or older than `newCumulativeTSN`.
+	// We know all sets in the r.unordered are complete ones.
+	// Just remove chunks that are equal to or older than newCumulativeTSN
+	// from the unorderedChunks
+	lastIdx := -1
+	for i, c := range r.unorderedChunks {
+		if sna32GT(c.tsn, newCumulativeTSN) {
+			break
 		}
+		lastIdx = i
+	}
+	if lastIdx >= 0 {
+		for _, c := range r.unorderedChunks[0 : lastIdx+1] {
+			r.subtractNumBytes(len(c.userData))
+		}
+		r.unorderedChunks = r.unorderedChunks[lastIdx+1:]
 	}
 }
 

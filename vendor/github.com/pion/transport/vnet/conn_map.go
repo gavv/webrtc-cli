@@ -1,9 +1,15 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"net"
 	"sync"
+)
+
+var (
+	errAddressAlreadyInUse       = errors.New("address already in use")
+	errNoSuchUDPConn             = errors.New("no such UDPConn")
+	errCannotRemoveUnspecifiedIP = errors.New("cannot remove unspecified IP by the specified IP")
 )
 
 type udpConnMap struct {
@@ -27,13 +33,13 @@ func (m *udpConnMap) insert(conn *UDPConn) error {
 	conns, ok := m.portMap[udpAddr.Port]
 	if ok {
 		if udpAddr.IP.IsUnspecified() {
-			return fmt.Errorf("address already in use")
+			return errAddressAlreadyInUse
 		}
 
 		for _, conn := range conns {
 			laddr := conn.LocalAddr().(*net.UDPAddr)
 			if laddr.IP.IsUnspecified() || laddr.IP.Equal(udpAddr.IP) {
-				return fmt.Errorf("address already in use")
+				return errAddressAlreadyInUse
 			}
 		}
 
@@ -82,7 +88,7 @@ func (m *udpConnMap) delete(addr net.Addr) error {
 
 	conns, ok := m.portMap[udpAddr.Port]
 	if !ok {
-		return fmt.Errorf("no such UDPConn")
+		return errNoSuchUDPConn
 	}
 
 	if udpAddr.IP.IsUnspecified() {
@@ -97,7 +103,7 @@ func (m *udpConnMap) delete(addr net.Addr) error {
 		laddr := conn.LocalAddr().(*net.UDPAddr)
 		if laddr.IP.IsUnspecified() {
 			// This can't happen!
-			return fmt.Errorf("cannot remove an unspecified IP by the specified IP")
+			return errCannotRemoveUnspecifiedIP
 		}
 
 		if laddr.IP.Equal(udpAddr.IP) {

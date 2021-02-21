@@ -4,8 +4,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/pion/sdp/v2"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/sdp/v3"
+	"github.com/pion/webrtc/v3"
 )
 
 func postprocessSDP(desc *webrtc.SessionDescription, overrideIP string) error {

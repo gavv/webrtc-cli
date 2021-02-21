@@ -5,15 +5,29 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pion/sdp/v2"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/sdp/v3"
+	"github.com/pion/webrtc/v3"
 )
 
 func newMediaEngine(params Params) *webrtc.MediaEngine {
 	mediaEngine := &webrtc.MediaEngine{}
 
-	mediaEngine.RegisterCodec(
-		webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, uint32(params.Rate)))
+	err := mediaEngine.RegisterCodec(
+		webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     "audio/opus",
+				ClockRate:    uint32(params.Rate),
+				Channels:     uint16(params.Channels),
+				SDPFmtpLine:  "",
+				RTCPFeedback: nil,
+			},
+			PayloadType: 111,
+		},
+		webrtc.RTPCodecTypeAudio)
+
+	if err != nil {
+		panic(err)
+	}
 
 	return mediaEngine
 }
@@ -23,41 +37,38 @@ func newMediaEngineFromOffer(params Params, offer *webrtc.SessionDescription) (
 ) {
 	mediaEngine := &webrtc.MediaEngine{}
 
-	if err := populateFromSDP(mediaEngine, offer); err != nil {
+	opusCodec, err := populateFromSDP(mediaEngine, offer)
+	if err != nil {
 		return nil, false, err
 	}
 
-	var codec *webrtc.RTPCodec
-	for _, c := range mediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio) {
-		if c.Name == webrtc.Opus {
-			codec = c
-			break
-		}
-	}
-
-	if codec == nil {
+	if opusCodec == nil {
 		return nil, false, fmt.Errorf("opus not offered")
 	}
-	if int(codec.ClockRate) != params.Rate {
+	if int(opusCodec.ClockRate) != params.Rate {
 		return nil, false, fmt.Errorf("want %d rate, offered %d rate",
-			params.Rate, codec.ClockRate)
+			params.Rate, opusCodec.ClockRate)
 	}
-	if int(codec.Channels) != params.Channels {
+	if int(opusCodec.Channels) != params.Channels {
 		return nil, false, fmt.Errorf("want %d channels, offered %d channels",
-			params.Channels, codec.Channels)
+			params.Channels, opusCodec.Channels)
 	}
 
-	enableFEC := strings.Contains(codec.SDPFmtpLine, "useinbandfec=1")
+	enableFEC := strings.Contains(opusCodec.SDPFmtpLine, "useinbandfec=1")
 
 	return mediaEngine, enableFEC, nil
 }
 
 // based on webrtc.MediaEngine.PopulateFromSDP
-func populateFromSDP(m *webrtc.MediaEngine, offer *webrtc.SessionDescription) error {
+func populateFromSDP(m *webrtc.MediaEngine, offer *webrtc.SessionDescription) (
+	*webrtc.RTPCodecParameters, error,
+) {
+	var codec *webrtc.RTPCodecParameters
+
 	parsedOffer := sdp.SessionDescription{}
 
 	if err := parsedOffer.Unmarshal([]byte(offer.SDP)); err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, md := range parsedOffer.MediaDescriptions {
@@ -68,30 +79,55 @@ func populateFromSDP(m *webrtc.MediaEngine, offer *webrtc.SessionDescription) er
 		for _, format := range md.MediaName.Formats {
 			pt, err := strconv.Atoi(format)
 			if err != nil {
-				return fmt.Errorf("format parse error")
+				return nil, fmt.Errorf("format parse error")
 			}
 
 			if pt < 0 || pt > 255 {
-				return fmt.Errorf("payload type out of range: %d", pt)
+				return nil, fmt.Errorf("payload type out of range: %d", pt)
 			}
 
 			payloadType := uint8(pt)
 			payloadCodec, err := parsedOffer.GetCodecForPayloadType(payloadType)
 			if err != nil {
-				return fmt.Errorf("could not find codec for payload type %d", payloadType)
+				return nil, fmt.Errorf("could not find codec for payload type %d", payloadType)
 			}
 
-			var codec *webrtc.RTPCodec
+			channels := uint16(0)
+			if val, err := strconv.Atoi(payloadCodec.EncodingParameters); err == nil {
+				channels = uint16(val)
+			}
+
+			feedback := []webrtc.RTCPFeedback{}
+			for _, raw := range payloadCodec.RTCPFeedback {
+				split := strings.Split(raw, " ")
+				entry := webrtc.RTCPFeedback{Type: split[0]}
+				if len(split) == 2 {
+					entry.Parameter = split[1]
+				}
+				feedback = append(feedback, entry)
+			}
+
 			switch payloadCodec.Name {
-			case webrtc.Opus:
-				codec = webrtc.NewRTPOpusCodec(payloadType, payloadCodec.ClockRate)
-				codec.SDPFmtpLine = payloadCodec.Fmtp
+			case "opus":
+				codec = &webrtc.RTPCodecParameters{
+					RTPCodecCapability: webrtc.RTPCodecCapability{
+						MimeType:     md.MediaName.Media + "/" + payloadCodec.Name,
+						ClockRate:    payloadCodec.ClockRate,
+						Channels:     channels,
+						SDPFmtpLine:  payloadCodec.Fmtp,
+						RTCPFeedback: feedback,
+					},
+					PayloadType: webrtc.PayloadType(pt),
+				}
 			default:
 				continue
 			}
 
-			m.RegisterCodec(codec)
+			if err := m.RegisterCodec(*codec, webrtc.RTPCodecTypeAudio); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return nil
+
+	return codec, nil
 }

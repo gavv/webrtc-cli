@@ -6,10 +6,11 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
-	"github.com/pion/webrtc/v2/pkg/media"
+	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media"
 	"gopkg.in/gavv/opus.v2"
 )
 
@@ -61,13 +62,14 @@ type Peer struct {
 	offer  *webrtc.SessionDescription
 	answer *webrtc.SessionDescription
 
-	localTrack  *webrtc.Track
-	remoteTrack *webrtc.Track
+	localTrack  *webrtc.TrackLocalStaticSample
+	remoteTrack *webrtc.TrackRemote
 
 	encoder      *opus.Encoder
 	decoder      *opus.Decoder
 	depacketizer *depacketizer
 
+	rate             int
 	channels         int
 	simulateLossPerc int
 
@@ -79,6 +81,7 @@ type Peer struct {
 
 func NewPeer(params Params) (*Peer, error) {
 	p := &Peer{
+		rate:             params.Rate,
 		channels:         params.Channels,
 		simulateLossPerc: params.SimulateLossPercent,
 		remoteTrackCh:    make(chan struct{}),
@@ -112,7 +115,7 @@ func NewPeer(params Params) (*Peer, error) {
 		settingEngine.SetEphemeralUDPPortRange(params.MinPort, params.MaxPort)
 	}
 
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(*mediaEngine),
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithSettingEngine(settingEngine))
 
 	p.conn, err = api.NewPeerConnection(webrtc.Configuration{
@@ -127,8 +130,12 @@ func NewPeer(params Params) (*Peer, error) {
 	}
 
 	if params.EnableWrite {
-		p.localTrack, err = p.conn.NewTrack(
-			webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "webrtc-cli")
+		p.localTrack, err = webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{
+				MimeType: "audio/opus",
+			},
+			"audio",
+			"webrtc-cli")
 		if err != nil {
 			return nil, fmt.Errorf("can't create local track: %s", err.Error())
 		}
@@ -160,11 +167,11 @@ func NewPeer(params Params) (*Peer, error) {
 	}
 
 	if params.EnableRead {
-		if _, err = p.conn.AddTransceiver(webrtc.RTPCodecTypeAudio); err != nil {
+		if _, err = p.conn.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio); err != nil {
 			return nil, fmt.Errorf("can't add transceiver: %s", err.Error())
 		}
 
-		p.conn.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		p.conn.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 			if p.remoteTrack == nil {
 				fmt.Fprintln(os.Stderr, "Accepting remote track")
 				p.remoteTrack = track
@@ -293,8 +300,9 @@ func (p *Peer) Write(pcm []int16) error {
 	}
 
 	err = p.localTrack.WriteSample(media.Sample{
-		Data:    b[:n],
-		Samples: uint32(len(pcm) / p.channels),
+		Data: b[:n],
+		Duration: time.Duration(
+			int64(len(pcm)/p.channels) * int64(time.Second) / int64(p.rate)),
 	})
 	if err != nil {
 		return fmt.Errorf("can't send frame: %s", err.Error())
@@ -334,7 +342,7 @@ func (p *Peer) getPacket() (*rtp.Packet, error) {
 		return nil, errors.New("peer is closed")
 	}
 
-	pkt, err := p.remoteTrack.ReadRTP()
+	pkt, _, err := p.remoteTrack.ReadRTP()
 	if err != nil {
 		return nil, fmt.Errorf("can't read RTP packet: %s", err.Error())
 	}

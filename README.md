@@ -44,23 +44,23 @@ Operating systems:
 Install dependencies:
 
 ```
-$ sudo apt-get install gcc make pkg-config libopus-dev libopusfile-dev libpulse-dev
+sudo apt-get install gcc make pkg-config libopus-dev libopusfile-dev libpulse-dev
 ```
 
 Install [recent Go](https://github.com/golang/go/wiki/Ubuntu) (at least 1.12 is needed):
 
 ```
-$ sudo add-apt-repository ppa:longsleep/golang-backports
-$ sudo apt-get update
-$ sudo apt-get install golang-go
+sudo add-apt-repository ppa:longsleep/golang-backports
+sudo apt-get update
+sudo apt-get install golang-go
 ```
 
 Clone and build:
 
 ```
-$ git clone https://github.com/gavv/webrtc-cli.git
-$ cd webrtc-cli
-$ make
+git clone https://github.com/gavv/webrtc-cli.git
+cd webrtc-cli
+make
 ```
 
 Run the tool:
@@ -72,7 +72,7 @@ $ ./webrtc-cli -h
 You can also install the tool system-wide, e.g.:
 
 ```
-$ sudo cp ./webrtc-cli /usr/local/bin
+sudo cp ./webrtc-cli /usr/local/bin
 ```
 
 #### Using go get
@@ -82,13 +82,13 @@ Alternatively, you can install `webrtc-cli` into GOPATH using `go get`.
 First make sure that the Go version is at least 1.12:
 
 ```
-$ go version
+go version
 ```
 
 And then run this command:
 
 ```
-$ go get -v github.com/gavv/webrtc-cli
+go get -v github.com/gavv/webrtc-cli
 ```
 
 It will automatically fetch sources and build and install `webrtc-cli` executable into `$GOPATH/bin` directory or into `~/go/bin` if `$GOPATH` is not set.
@@ -96,7 +96,7 @@ It will automatically fetch sources and build and install `webrtc-cli` executabl
 ## Options
 
 ```
-$ webrtc-cli --help
+webrtc-cli --help
 Usage of webrtc-cli:
       --offer                     enable offer mode
       --answer                    enable answer mode
@@ -184,13 +184,13 @@ If you allow it to access the microphone, it will play sound from the remote pee
 First peer:
 
 ```
-$ webrtc-cli --offer --source ./test.wav
+webrtc-cli --offer --source ./test.wav
 ```
 
 Second peer:
 
 ```
-$ webrtc-cli --answer --sink alsa_output.pci-0000_00_1f.3.analog-stereo
+webrtc-cli --answer --sink alsa_output.pci-0000_00_1f.3.analog-stereo
 ```
 
 #### Stream from PulseAudio source to PulseAudio sink
@@ -198,13 +198,13 @@ $ webrtc-cli --answer --sink alsa_output.pci-0000_00_1f.3.analog-stereo
 First peer:
 
 ```
-$ webrtc-cli --offer --source alsa_input.pci-0000_00_1f.3.analog-stereo
+webrtc-cli --offer --source alsa_input.pci-0000_00_1f.3.analog-stereo
 ```
 
 Second peer:
 
 ```
-$ webrtc-cli --answer --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo
+webrtc-cli --answer --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo
 ```
 
 #### Bidirectional streaming
@@ -212,7 +212,7 @@ $ webrtc-cli --answer --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-
 First peer:
 
 ```
-$ webrtc-cli --offer \
+webrtc-cli --offer \
     --source alsa_input.pci-0000_00_1f.3.analog-stereo \
     --sink alsa_input.pci-0000_00_1f.3.analog-stereo
 ```
@@ -220,7 +220,7 @@ $ webrtc-cli --offer \
 Second peer:
 
 ```
-$ webrtc-cli --answer \
+webrtc-cli --answer \
     --source alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
     --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo
 ```
@@ -232,7 +232,7 @@ First peer: [WebRTC demo](https://gavv.github.io/webrtc-cli/) ([source code](doc
 Second peer:
 
 ```
-$ webrtc-cli --answer \
+webrtc-cli --answer \
     --source alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
     --sink alsa_output.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo
 ```
@@ -240,7 +240,7 @@ $ webrtc-cli --answer \
 #### Use lower latency
 
 ```
-$ webrtc-cli \
+webrtc-cli \
     --pulse-buf 20ms \
     --source-frame 10ms --sink-frame 10ms \
     --jitter-buf 20ms --max-drift 20ms \
@@ -250,7 +250,7 @@ $ webrtc-cli \
 #### Force specific IP address and UDP port range
 
 ```
-$ webrtc-cli --offer --override-ip 93.184.216.34 --ports 5100:5200 ...
+webrtc-cli --offer --override-ip 93.184.216.34 --ports 5100:5200 ...
 ```
 
 This will restrict what UDP ports can be used to given range and replace IP addresses of all ICE candidates in generated SDP offer with given IP.
@@ -291,19 +291,19 @@ Feel free to report bugs, suggest improvements, and send pull requests!
 Build:
 
 ```
-$ make
+make
 ```
 
 Run checks:
 
 ```
-$ make check
+make check
 ```
 
 Format code:
 
 ```
-$ make fmt
+make fmt
 ```
 
 ## Authors

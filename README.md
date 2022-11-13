@@ -66,7 +66,7 @@ make
 Run the tool:
 
 ```
-$ ./webrtc-cli -h
+./webrtc-cli -h
 ```
 
 You can also install the tool system-wide, e.g.:
@@ -96,7 +96,7 @@ It will automatically fetch sources and build and install `webrtc-cli` executabl
 ## Options
 
 ```
-webrtc-cli --help
+$ webrtc-cli --help
 Usage of webrtc-cli:
       --offer                     enable offer mode
       --answer                    enable answer mode
